@@ -1,0 +1,120 @@
+#type:     node
+#context:  sop
+#internal: lidarimport
+#icon:     SOP/lidarimport
+#since: 16.0
+
+= Lidar Import =
+
+"""Reads a lidar file and imports a point cloud from its data."""
+
+NOTE:
+    Currently, this node supports E57 and LAS lidar files. Neither of these formats guarantee that the point clouds are near the origin. However, both formats assume the z-axis points upwards instead of the y-axis.
+
+This SOP reads a lidar file and imports a point cloud from its data. It provides the option of reading several additional attributes from the file, provided that these attributes exist in the file. There are
+also filtering options to work with large point clouds.
+
+In E57 files, some attributes (such as position) may come with associated data that marks certain points as having "invalid" values. In these cases, a group will be created that contains all "invalid" points for that attribute.
+
+TIP:
+    This node will try to read as little from the provided file as possible to reduce cook times when changing parameters, particularly in the __Attributes__ section. However, with large files, long cook times are unavoidable. It is recommended that you write the point cloud to a `.bgeo`
+    file once you're satisfied with it, so that you can simply read the `.bgeo` in the future with the [File SOP|Node:sop/file] and get faster cook times.
+
+TIP:
+    To work with the point cloud as a VDB primitive, you can use the [Convert VDB Points SOP|Node:sop/convertvdbpoints].
+
+@parameters
+
+File:
+    #id: filename
+    The name of the lidar file.
+
+Group Prefix:
+    #id: group_prefix
+    The prefix of the created groups, which represent separate scans stored in the file. Applies to E57 files only, as LAS files do not support multiple scans.
+
+== Filtering ==
+
+Filter Type:
+    #id: filter_type
+    The type of filtering used on the point cloud.
+    
+    None:
+	    Do not apply any filtering.
+        
+    Range:
+	    Filter the point cloud by a specified range.
+        
+    Maximum:
+	    Filter the point cloud by setting a maximum number of points.
+
+    TIP:
+	    The node will be unable to cache its previous output if this parameter is changed. To avoid this, set this parameter before setting __File__.
+        
+    
+Select ___ of ___:
+    #id: select_range
+    When __Filter Type__ is __Range__, every (number in the left field) points for every (number in the right field) points are read, for each scan in the file.
+
+    TIP:
+	    Try to keep these numbers small, as otherwise you may lose detail from the point cloud.
+    
+    
+Max Number of Points:
+    #id: max_points
+    When __Filter Type__ is __Maximum__, do not read more points than the specified number. These points will be sampled from the entire file.
+
+Delete Invalid Points:
+    #id: delete_invalid
+    Deletes every point in an "invalid group". Applies to E57 files only.
+    
+    NOTE:
+	    Enabling this option will restrict the node's incremental reading capabilities, and can significantly increase subsequent cook times.
+    
+== Attributes ==
+
+Color:
+    #id: color
+    The origin of color data read from the file.
+    
+    None:
+	    Do not read any color data.
+        
+    From Point Cloud:
+	    Read color data from the point scans. When reading E57 files, an invalid group may be created.
+        
+    From Images:
+	    Read color data from the embedded images. This data only exists in E57 files.
+        
+    
+Intensity:
+    #id: intensity
+    Include the intensity of the laser pulse that brought the point data.
+    When reading E57 files, an invalid group may be created.
+    
+    
+Row and Column:
+    #id: row_col
+    Include the row and column indices of the point cloud, if it is also represented in the file as a grid. This data only exists in E57 files.
+    
+    
+Return Data:
+    #id: ret_data
+    Include the return index and the number of returns of the laser pulse that brought the point data.
+    
+    
+Timestamp:
+    #id: timestamp
+    Include the timestamps for when the laser pulse brought each point to the scanner. When reading E57 files, an invalid group may be created.
+    
+    
+Surface Normals:
+    #id: normals
+    Include the surface normals of the points. This data only exists in E57 files.
+    
+
+@related
+
+- [Node:sop/pointcloudiso]
+- [Node:sop/triangulate2d]
+- [Node:sop/convertvdbpoints]
