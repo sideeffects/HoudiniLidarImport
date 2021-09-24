@@ -2662,4 +2662,3 @@ SOP_LidarImport::clearSopNodeCache()
 
     myScanGroupMap.clear();
 }
-
