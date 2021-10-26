@@ -51,14 +51,12 @@ Filter Type:
     TIP:
 	    The node will be unable to cache its previous output if this parameter is changed. To avoid this, set this parameter before setting __File__.
         
-    
 Select ___ of ___:
     #id: select_range
     When __Filter Type__ is __Range__, every (number in the left field) points for every (number in the right field) points are read, for each scan in the file.
 
     TIP:
 	    Try to keep these numbers small, as otherwise you may lose detail from the point cloud.
-    
     
 Max Number of Points:
     #id: max_points
@@ -86,32 +84,40 @@ Color:
     From Images:
 	    Read color data from the embedded images. This data only exists in E57 files.
         
-    
 Intensity:
     #id: intensity
     Include the intensity of the laser pulse that brought the point data.
     When reading E57 files, an invalid group may be created.
     
-    
 Row and Column:
     #id: row_col
     Include the row and column indices of the point cloud, if it is also represented in the file as a grid. This data only exists in E57 files.
-    
     
 Return Data:
     #id: ret_data
     Include the return index and the number of returns of the laser pulse that brought the point data.
     
-    
 Timestamp:
     #id: timestamp
     Include the timestamps for when the laser pulse brought each point to the scanner. When reading E57 files, an invalid group may be created.
     
-    
 Surface Normals:
     #id: normals
     Include the surface normals of the points. This data only exists in E57 files.
+
+Rigid Transforms:
+    #id: rigidtransforms
+    For E57 files, include the rigid transforms associated with each scan.
+    These are created as matrix4 detail attributes named "<prefix>transform1",
+    "<prefix>transform2", etc. where __<prefix>__ is the value specified in the
+    __Group Prefix__ parameter.
     
+Scan Names:
+    #id: scannames
+    For E57 files, create the string array global attribute, __scannames__,
+    that lists the names of the scans in the same order that the groups are
+    numbered. Not all scans have names; if a name is missing, then its
+    corresponding value in the array will be the empty string.
 
 @related
 
