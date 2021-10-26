@@ -111,7 +111,20 @@ Timestamp:
 Surface Normals:
     #id: normals
     Include the surface normals of the points. This data only exists in E57 files.
+
+Rigid Transforms:
+    #id: rigidtransforms
+    For E57 files, include the rigid transforms associated with each scan.
+    These are created as matrix4 detail attributes named "<prefix>transform1",
+    "<prefix>transform2", etc. where __<prefix>__ is the value specified in the
+    __Group Prefix__ parameter.
     
+Scan Names:
+    #id: scannames
+    For E57 files, create the string array global attribute, __scannames__,
+    that lists the names of the scans in the same order that the groups are
+    numbered. Not all scans have names; if a name is missing, then its
+    corresponding value in the array will be the empty string.
 
 @related
 

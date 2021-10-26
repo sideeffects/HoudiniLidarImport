@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020
+ * Copyright (c) 2021
  *	Side Effects Software Inc.  All rights reserved.
  *
  * Redistribution and use of Houdini Development Kit samples in source and
@@ -33,6 +33,7 @@
 #include <liblas/liblas.hpp>
 
 #include <GU/GU_Detail.h>
+#include <GA/GA_Handle.h>
 #include <GA/GA_PageHandle.h>
 #include <GA/GA_SplittableRange.h>
 #include <OP/OP_Operator.h>
@@ -44,15 +45,15 @@
 #include <PXL/PXL_Raster.h>
 #include <IMG/IMG_File.h>
 #include <IMG/IMG_Format.h>
+#include <UT/UT_Assert.h>
 #include <UT/UT_DSOVersion.h>
 #include <UT/UT_Interrupt.h>
-#include <UT/UT_String.h>
-#include <UT/UT_VectorTypes.h>
+#include <UT/UT_IStream.h>
 #include <UT/UT_Matrix4.h>
 #include <UT/UT_Quaternion.h>
-#include <UT/UT_IStream.h>
+#include <UT/UT_String.h>
 #include <UT/UT_UniquePtr.h>
-#include <UT/UT_Assert.h>
+#include <UT/UT_VectorTypes.h>
 
 #include <vector>
 #include <functional>
@@ -81,6 +82,8 @@ static PRM_Name parmNames[] = {
     PRM_Name("select_range", "Select _ of _"),
     PRM_Name("max_points", "Max Number of Points"),
     PRM_Name("delete_invalid", "Delete Invalid Points"),
+    PRM_Name("rigidtransforms", "Rigid Transforms"),
+    PRM_Name("scannames", "Scan Names"),
 };
 
 static PRM_Default defaultPrefix(0, "lidar_group");
@@ -100,7 +103,7 @@ static PRM_Name filterSectionName("filtering");
 static PRM_Default filterSectionLabel(4, "Filtering");
 
 static PRM_Name attribSectionName("attribs");
-static PRM_Default attribSectionLabel(6, "Attributes");
+static PRM_Default attribSectionLabel(8, "Attributes");
 
 static PRM_Name filterOptionNames[] = {
     PRM_Name("no_filter", "None"),
@@ -132,6 +135,8 @@ SOP_LidarImport::myTemplateList[] = {
     PRM_Template(PRM_TOGGLE, 1, &parmNames[4]),
     PRM_Template(PRM_TOGGLE, 1, &parmNames[5]),
     PRM_Template(PRM_TOGGLE, 1, &parmNames[6]),
+    PRM_Template(PRM_TOGGLE, 1, &parmNames[12]),
+    PRM_Template(PRM_TOGGLE, 1, &parmNames[13]),
     PRM_Template()
 };
 
@@ -241,9 +246,10 @@ struct sop_ScanInfo
 {
     e57::IntensityLimits	myIntensityLimits;
     e57::ColorLimits		myColorLimits;
-    UT_Matrix4			myRBXForm;
+    UT_Matrix4D			myRBXForm;
     UT_StringHolder		myGuid;
     exint			myNumPoints;
+    UT_StringHolder             myName;
 
     sop_AvailableE57Attribs	myAvailableAttribs;
 };
@@ -260,7 +266,7 @@ struct sop_ImageInfo
 	SphericalRep		mySphericalRep;
 	CylindricalRep		myCylindricalRep;
     };
-    UT_Matrix4			myRBXForm;
+    UT_Matrix4D			myRBXForm;
     UT_StringHolder		myAssociatedScanGuid;
     e57::Image2DType		myFileType;
     e57::Image2DProjection	myProjectionType;
@@ -900,8 +906,11 @@ public:
     exint getPointsInFile() const;
     exint getPointsInScan(int idx) const;
 
-    UT_Matrix4 getScanRBXForm(int idx) const;
-    UT_Matrix4 getImageRBXForm(int idx) const;
+    UT_Matrix4D getScanRBXForm(int idx) const;
+    UT_Matrix4D getImageRBXForm(int idx) const;
+
+    const UT_StringHolder &getScanName(int idx) const
+    { return myScans(idx).myName; }
 
     sop_E57PointReader::Builder createPointReaderBuilder(int idx, GU_Detail *gdp,
 	    int range_good, int range_size);
@@ -961,13 +970,13 @@ SOP_LidarImport::E57Reader::E57Reader(const char *filename)
     e57::StructureNode root_node = myFileHandle.root();
     e57::VectorNode scan_root_node(root_node.get("/data3D"));
 
-    auto set_rbxform = [](e57::StructureNode parent, UT_Matrix4 &rbxform)
+    auto set_rbxform = [](e57::StructureNode parent, UT_Matrix4D &rbxform)
     {
 	if (parent.isDefined("pose"))
 	{
 	    e57::StructureNode rbxform_node(parent.get("pose"));
 
-	    fpreal		rw, rx, ry, rz;
+	    fpreal64 rw, rx, ry, rz;
 	    if (rbxform_node.isDefined("rotation"))
 	    {
 		e57::StructureNode rot_node(rbxform_node.get("rotation"));
@@ -982,7 +991,7 @@ SOP_LidarImport::E57Reader::E57Reader(const char *filename)
 		rw = 1.0;
 	    }
 
-	    fpreal		tx, ty, tz;
+	    fpreal64 tx, ty, tz;
 	    if (rbxform_node.isDefined("translation"))
 	    {
 		e57::StructureNode trans_node(rbxform_node.get("translation"));
@@ -1062,7 +1071,7 @@ SOP_LidarImport::E57Reader::E57Reader(const char *filename)
 	    available_attribs.myHasNormals = false;
 	}
 
-	scan.myAvailableAttribs = available_attribs;
+        scan.myAvailableAttribs = available_attribs;
 
 	// set intensity limits
 	if (scan_node.isDefined("intensityLimits"))
@@ -1148,6 +1157,19 @@ SOP_LidarImport::E57Reader::E57Reader(const char *filename)
 	guid_name_wrapper.forceValidVariableName();
 
 	scan.myGuid = UT_StringHolder(guid_name_wrapper.c_str());
+
+        // Set name if available, else leave as empty string
+	UT_StringHolder scan_name;
+	try
+	{
+	    e57::StringNode name_node(scan_node.get("name"));
+	    scan.myName = name_node.value();
+	}
+	catch (e57::E57Exception &)
+	{
+	    scan.myName.clear();
+	}
+
 
 	myScans.append(scan);
     }
@@ -1338,13 +1360,13 @@ SOP_LidarImport::E57Reader::getPointsInScan(int idx) const
     return myScans(idx).myNumPoints;
 }
 
-UT_Matrix4
+UT_Matrix4D
 SOP_LidarImport::E57Reader::getScanRBXForm(int idx) const
 {
     return myScans(idx).myRBXForm;
 }
 
-UT_Matrix4
+UT_Matrix4D
 SOP_LidarImport::E57Reader::getImageRBXForm(int idx) const
 {
     return myImages(idx).myRBXForm;
@@ -1748,6 +1770,8 @@ SOP_LidarImport::cookMySop(OP_Context &context)
     bool use_ret_data = evalInt("ret_data", 0, now);
     bool use_timestamp = evalInt("timestamp", 0, now);
     bool use_normals = evalInt("normals", 0, now);
+    bool use_transforms = evalInt("rigidtransforms", 0, now);
+    bool use_names = evalInt("scannames", 0, now);
 
     if (error() >= UT_ERROR_ABORT || !filename.isstring() || !prefix.isstring() 
 	    || forceValidGroupPrefix(prefix, UT_ERROR_ABORT))
@@ -1784,6 +1808,8 @@ SOP_LidarImport::cookMySop(OP_Context &context)
     bool ret_data_changed = (use_ret_data != myCachedUseReturnData);
     bool timestamp_changed = (use_timestamp != myCachedUseTimestamp);
     bool normals_changed = (use_normals != myCachedUseNormals);
+    bool transforms_changed = (use_transforms != myCachedUseTransforms);
+    bool names_changed = (use_names != myCachedUseNames);
 
     bool clear_cache_required = file_changed || filter_changed
 	|| delete_invalid_changed || delete_invalid_pts;
@@ -1792,6 +1818,16 @@ SOP_LidarImport::cookMySop(OP_Context &context)
     {
 	gdp->clearAndDestroy();
 	clearSopNodeCache();
+
+        // Must re-read everything
+        color_changed = true;
+        intensity_changed = true;
+        row_col_changed = true;
+        ret_data_changed = true;
+        timestamp_changed = true;
+        normals_changed = true;
+        transforms_changed = true;
+        names_changed = true;
     }
 
     // Cache all the current parm values
@@ -1807,6 +1843,8 @@ SOP_LidarImport::cookMySop(OP_Context &context)
     myCachedUseReturnData = use_ret_data;
     myCachedUseTimestamp = use_timestamp;
     myCachedUseNormals = use_normals;
+    myCachedUseTransforms = use_transforms;
+    myCachedUseNames = use_names;
     // Group prefix is cached after all the groups have been created/renamed
 
     UT_AutoInterrupt boss("Reading lidar file");
@@ -1894,7 +1932,8 @@ SOP_LidarImport::cookMySop(OP_Context &context)
 				  clear_cache_required, color_changed, 
 				  intensity_changed, row_col_changed, 
 				  ret_data_changed, timestamp_changed, 
-				  normals_changed, prefix, max_pts_in_scans(i));
+				  normals_changed, transforms_changed,
+                                  prefix, max_pts_in_scans(i));
 
 	    if (scan_missing_attribs.entries() != 0)
 	    {
@@ -1955,7 +1994,7 @@ SOP_LidarImport::cookMySop(OP_Context &context)
 	    }
 
 	    // Delete internal attribute once everything's done
-	    gdp->destroyPointAttrib("__num_colors__");
+	    gdp->destroyPointAttrib(GA_SCOPE_PRIVATE, "__num_colors__");
 	}
 
 	if (delete_invalid_pts)
@@ -1983,6 +2022,24 @@ SOP_LidarImport::cookMySop(OP_Context &context)
 
 	    gdp->destroyPoints(GA_Range(invalid_pts));
 	}
+
+        if (names_changed)
+        {
+            if (!myCachedUseNames)
+            {
+                gdp->destroyAttribute(GA_ATTRIB_GLOBAL, "scannames");
+            }
+            else
+            {
+                UT_StringArray names(num_scans, num_scans);
+                for (int i = 0; i < num_scans; ++i)
+                    names(i) = reader.getScanName(i);
+
+                GA_RWHandleSA names_h(gdp->addStringArray(
+                                                GA_ATTRIB_GLOBAL, "scannames"));
+                names_h.set(GA_Offset(0), names);
+            }
+        }
     }
 #ifdef E57_SOP_VERBOSE
     catch (e57::E57Exception &e)
@@ -2151,6 +2208,7 @@ SOP_LidarImport::readE57Scan(int scan_index, int64 &pt_idx, E57Reader &reader,
 			bool ret_data_changed,
 			bool timestamp_changed,
 			bool normals_changed,
+			bool transforms_changed,
 			UT_StringHolder current_prefix,
 			exint scan_max_pts)
 {
@@ -2345,6 +2403,27 @@ SOP_LidarImport::readE57Scan(int scan_index, int64 &pt_idx, E57Reader &reader,
 	gdp->destroyNormalAttribute(GA_ATTRIB_POINT);
     }
 
+    if (clear_cache_required || current_prefix != myCachedGroupPrefix
+        || transforms_changed)
+    {
+        UT_WorkBuffer name(myCachedGroupPrefix.c_str());
+        name.appendFormat("transform{}", scan_index + 1);
+        gdp->destroyAttribute(GA_ATTRIB_GLOBAL, name);
+
+        if (myCachedUseTransforms)
+        {
+            name = current_prefix;
+            name.appendFormat("transform{}", scan_index + 1);
+
+            GA_RWHandleM4D xform_h(gdp->addFloatTuple(
+                    GA_ATTRIB_GLOBAL, name, 16,
+                    GA_Defaults(GA_Defaults::matrix4()), 0, 0,
+                    GA_STORE_REAL64));
+            // Take transform from reader directly to avoid precision lost
+            xform_h.set(GA_Offset(0), reader.getScanRBXForm(scan_index));
+        }
+    }
+
     GA_PointGroup *scan_group = nullptr;
     if (clear_cache_required)
     {
@@ -2499,7 +2578,6 @@ bool
 SOP_LidarImport::updateColourFromImage(int image_index, E57Reader &reader, 
 				     UT_AutoInterrupt &boss)
 {
-
     UT_Matrix4 rigid_body_transform_inv(reader.getImageRBXForm(image_index));
     rigid_body_transform_inv.invertDouble();
 

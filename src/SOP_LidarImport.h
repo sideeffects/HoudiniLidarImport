@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020
+ * Copyright (c) 2021
  *        Side Effects Software Inc.  All rights reserved.
  *
  * Redistribution and use of Houdini Development Kit samples in source and
@@ -83,6 +83,7 @@ private:
                                         bool ret_data_changed,
                                         bool timestamp_changed,
                                         bool normals_changed,
+                                        bool transforms_changed,
                                         UT_StringHolder current_prefix,
                                         exint scan_max_pts);
 
@@ -105,6 +106,8 @@ private:
     bool			 myCachedUseReturnData;
     bool			 myCachedUseTimestamp;
     bool			 myCachedUseNormals;
+    bool			 myCachedUseTransforms;
+    bool			 myCachedUseNames;
 
     int				 myCachedFilterType;
     int				 myCachedRangeGood;
