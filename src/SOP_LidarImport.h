@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021
+ * Copyright (c) 2022
  *        Side Effects Software Inc.  All rights reserved.
  *
  * Redistribution and use of Houdini Development Kit samples in source and
@@ -60,8 +60,8 @@ protected:
     OP_ERROR                     cookMySop(OP_Context &context) override;
 
 private:
-    void		         readLASFile(
-                                        const char *filename,
+    bool		         readLASFile(
+                                        std::istream& stream,
                                         UT_AutoInterrupt &boss,
                                         bool clear_cache_required,
                                         bool color_changed,
