@@ -2518,11 +2518,10 @@ SOP_LidarImport::LASReader::openStream(std::istream& stream)
     myPointCount = static_cast<exint>(npoints);
     myPointFormat = static_cast<uint8>(myHeader->point_data_format);
 
-    myScale = {
-            myHeader->x_scale_factor, myHeader->y_scale_factor,
-            myHeader->z_scale_factor};
+    myScale.assign(myHeader->x_scale_factor, myHeader->y_scale_factor,
+            myHeader->z_scale_factor);
 
-    myOffset = {myHeader->x_offset, myHeader->y_offset, myHeader->z_offset};
+    myOffset.assign(myHeader->x_offset, myHeader->y_offset, myHeader->z_offset);
 
     myBoundingBox.setBounds(
             myHeader->min_x, myHeader->min_y, myHeader->min_z, myHeader->max_x,
@@ -2530,7 +2529,7 @@ SOP_LidarImport::LASReader::openStream(std::istream& stream)
 
     // Ensure that the header was read correctly
     myPointFormat = myHeader->point_data_format;
-    if (myPointFormat < 0 || myPointFormat > 10)
+    if (myPointFormat > 10)
     {
         return false;
     }
