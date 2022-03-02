@@ -9,16 +9,12 @@
 """Reads a lidar file and imports a point cloud from its data."""
 
 NOTE:
-    Currently, this node supports E57 and LAS lidar files. Neither of these formats guarantee that the point clouds are near the origin. However, both formats assume the z-axis points upwards instead of the y-axis.
+    Currently, this node supports E57, LAS, and LAZ lidar files. Each format assumes the z-axis points upwards, instead of the y-axis. Proximity to the origin is not guaranteed by the supported formats.
 
-This SOP reads a lidar file and imports a point cloud from its data. It provides the option of reading several additional attributes from the file, provided that these attributes exist in the file. There are
-also filtering options to work with large point clouds.
-
-In E57 files, some attributes (such as position) may come with associated data that marks certain points as having "invalid" values. In these cases, a group will be created that contains all "invalid" points for that attribute.
+This SOP reads a lidar file and imports a point cloud from its data. Several point-attributes may be imported, provided they exist for a particular file. This SOP also provides filtering options to work with large point clouds.
 
 TIP:
-    This node will try to read as little from the provided file as possible to reduce cook times when changing parameters, particularly in the __Attributes__ section. However, with large files, long cook times are unavoidable. It is recommended that you write the point cloud to a `.bgeo`
-    file once you're satisfied with it, so that you can simply read the `.bgeo` in the future with the [File SOP|Node:sop/file] and get faster cook times.
+    This node will try to read as little from the provided file as possible to reduce cook times when changing parameters, particularly in the __Attributes__ section. However, with large files, long cook times are unavoidable. It is recommended that you write the point cloud to a `.bgeo` file once you're satisfied with it, so that you can simply read the `.bgeo` in the future with the [File SOP|Node:sop/file] and get faster cook times. 
 
 TIP:
     To work with the point cloud as a VDB primitive, you can use the [Convert VDB Points SOP|Node:sop/convertvdbpoints].
@@ -31,7 +27,7 @@ File:
 
 Group Prefix:
     #id: group_prefix
-    The prefix of the created groups, which represent separate scans stored in the file. Applies to E57 files only, as LAS files do not support multiple scans.
+    The prefix of the created groups, which represent separate scans stored in the file. Applies to E57 files only, as LAS and LAZ are single-scan formats.
 
 == Filtering ==
 
@@ -71,6 +67,8 @@ Delete Invalid Points:
     
 == Attributes ==
 
+In E57 files, some attributes (such as position) may come with associated data that marks certain points as having "invalid" values. In these cases, an "invalid group" will be created that contains all "invalid" points for that attribute. These points can be deleted with the __Delete Invalid Points__ option.
+
 Color:
     #id: color
     The origin of color data read from the file.
@@ -82,7 +80,7 @@ Color:
 	    Read color data from the point scans. When reading E57 files, an invalid group may be created.
         
     From Images:
-	    Read color data from the embedded images. This data only exists in E57 files.
+	    Read color data from the embedded images. Image-deriven color only exists for E57 files, and not for LAS or LAZ files.
         
 Intensity:
     #id: intensity
