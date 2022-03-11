@@ -304,7 +304,48 @@ computeRangeFromMaxPoints(
         range_size = SYSceil(range_size / 10.0);
     }
 }
-}
+
+struct sop_ChangedParms
+{
+    bool myFilename = false;
+    bool myGroup_prefix = false;
+    bool myFilter_type = false;
+    bool mySelect_range = false;
+    bool myMax_points = false;
+    bool myDelete_invalid = false;
+    bool myColor = false;
+    bool myIntensity = false;
+    bool myRow_col = false;
+    bool myRet_data = false;
+    bool myTimestamp = false;
+    bool myNormals = false;
+    bool myRigidtransforms = false;
+    bool myScannames = false;
+
+    // If lidar data needs to be re-read.
+    bool myClearCacheRequired = false;
+
+    void setAllChangedTrue()
+    {
+        myFilename = true;
+        myGroup_prefix = true;
+        myFilter_type = true;
+        mySelect_range = true;
+        myMax_points = true;
+        myDelete_invalid = true;
+        myColor = true;
+        myIntensity = true;
+        myRow_col = true;
+        myRet_data = true;
+        myTimestamp = true;
+        myNormals = true;
+        myRigidtransforms = true;
+        myScannames = true;
+
+        myClearCacheRequired = true;
+    }
+};
+} // namespace
 
 //******************************************************************************
 //*			        LAS/LAZ READER                                 *
@@ -650,11 +691,7 @@ readLASFile(
         UT_AutoInterrupt &boss,
         const SOP_NodeVerb::CookParms &cookparms,
         GU_Detail *gdp,
-        bool clear_cache_required,
-        bool color_changed,
-        bool intensity_changed,
-        bool ret_data_changed,
-        bool timestamp_changed)
+	const sop_ChangedParms& changedparms)
 {
     using namespace SOP_LidarImportEnums;
 
@@ -662,26 +699,35 @@ readLASFile(
     SOP_LidarImportCache *cache
             = static_cast<SOP_LidarImportCache *>(cookparms.cache());
 
-    bool read_position = clear_cache_required;
-    bool read_color = color_changed
+    bool read_position = changedparms.myClearCacheRequired;	
+    bool read_color = changedparms.myColor
                       && cache->myParms.getColor() == Color::FROM_PTCLOUD;
-
-    bool read_intensity = intensity_changed && cache->myParms.getIntensity();
-    bool read_return_data = ret_data_changed && cache->myParms.getRet_data();
-    bool read_timestamp = timestamp_changed && cache->myParms.getTimestamp();
+    bool read_intensity = changedparms.myIntensity
+                          && cache->myParms.getIntensity();
+    bool read_return_data = changedparms.myRet_data
+                            && cache->myParms.getRet_data();
+    bool read_timestamp = changedparms.myTimestamp
+                          && cache->myParms.getTimestamp();
 
     // Remove attributes that were toggled off:
-    if (color_changed && cache->myParms.getColor() != Color::FROM_PTCLOUD)
+    if (changedparms.myColor
+        && cache->myParms.getColor() != Color::FROM_PTCLOUD)
+    {
         gdp->destroyDiffuseAttribute(GA_ATTRIB_POINT);
-    if (intensity_changed && !cache->myParms.getIntensity())
+    }
+    if (changedparms.myIntensity && !cache->myParms.getIntensity())
+    {
         gdp->destroyPointAttrib("intensity");
-    if (ret_data_changed && !cache->myParms.getRet_data())
+    }
+    if (changedparms.myRet_data && !cache->myParms.getRet_data())
     {
         gdp->destroyPointAttrib("return_index");
         gdp->destroyPointAttrib("return_count");
     }
-    if (timestamp_changed && !cache->myParms.getTimestamp())
+    if (changedparms.myTimestamp && !cache->myParms.getTimestamp())
+    {
         gdp->destroyPointAttrib("timestamp");
+    }
 
     // Pass stream to reader and scrape its metadata.
     LASReader reader;
@@ -747,7 +793,7 @@ readLASFile(
     }
 
     // Initialize detail page handles for reading.
-    if (clear_cache_required)
+    if (changedparms.myClearCacheRequired)
         gdp->appendPointBlock(num_pts);
     UT_ASSERT(gdp->getNumPoints() == num_pts);
 
@@ -2154,14 +2200,7 @@ readE57Scan(
 	    E57Reader &reader,
 	    UT_AutoInterrupt &boss,
 	    UT_StringArray &missing_attribs,
-	    bool clear_cache_required,
-	    bool color_changed,
-	    bool intensity_changed,
-	    bool row_col_changed,
-	    bool ret_data_changed,
-	    bool timestamp_changed,
-	    bool normals_changed,
-	    bool transforms_changed,
+	    const sop_ChangedParms &changedparms,
 	    UT_StringHolder current_prefix,
 	    exint scan_max_pts)
 {
@@ -2177,6 +2216,7 @@ readE57Scan(
     switch (cache->myParms.getFilter_type())
     {
     case Filter_type::RANGE_FILTER:
+    {
         UT_Vector2I range_params = cache->myParms.getSelect_range();
         if (isRangeValid(range_params[0], range_params[1]))
         {
@@ -2184,11 +2224,14 @@ readE57Scan(
             range_size = range_params[1];
         }
         break;
+    }
     case Filter_type::MAX_FILTER:
+    {
         if (isRangeValid(scan_max_pts, pts_in_scan))
             computeRangeFromMaxPoints(
                     scan_max_pts, pts_in_scan, range_good, range_size);
         break;
+    }
     case Filter_type::NO_FILTER:
     default:
         break;
@@ -2197,7 +2240,7 @@ readE57Scan(
             reader.createPointReaderBuilder(
                     scan_index, gdp, range_good, range_size));
 
-    if (clear_cache_required)
+    if (changedparms.myClearCacheRequired)
     {
         if (reader.hasCartesian(scan_index) || reader.hasSpherical(scan_index))
         {
@@ -2225,7 +2268,8 @@ readE57Scan(
         }
     }
 
-    if (color_changed && cache->myParms.getColor() == Color::FROM_PTCLOUD)
+    if (changedparms.myColor
+        && cache->myParms.getColor() == Color::FROM_PTCLOUD)
     {
         if (reader.hasColor(scan_index))
         {
@@ -2241,7 +2285,8 @@ readE57Scan(
             missing_attribs.append(UT_StringHolder("color"));
         }
     }
-    else if (color_changed && cache->myParms.getColor() != Color::FROM_PTCLOUD)
+    else if (changedparms.myColor
+            && cache->myParms.getColor() != Color::FROM_PTCLOUD)
     {
         gdp->destroyDiffuseAttribute(GA_ATTRIB_POINT);
 
@@ -2250,7 +2295,7 @@ readE57Scan(
             gdp->destroyPointGroup(invalid_group);
     }
 
-    if (intensity_changed && cache->myParms.getIntensity())
+    if (changedparms.myIntensity && cache->myParms.getIntensity())
     {
         if (reader.hasIntensity(scan_index))
         {
@@ -2266,7 +2311,7 @@ readE57Scan(
             missing_attribs.append(UT_StringHolder("intensity"));
         }
     }
-    else if (intensity_changed && !cache->myParms.getIntensity())
+    else if (changedparms.myIntensity && !cache->myParms.getIntensity())
     {
         gdp->destroyPointAttrib("intensity");
 
@@ -2276,7 +2321,7 @@ readE57Scan(
             gdp->destroyPointGroup(invalid_group);
     }
 
-    if (row_col_changed && cache->myParms.getRow_col())
+    if (changedparms.myRow_col && cache->myParms.getRow_col())
     {
         if (reader.hasRowCol(scan_index))
         {
@@ -2290,13 +2335,13 @@ readE57Scan(
             missing_attribs.append(UT_StringHolder("row and column indices"));
         }
     }
-    else if (row_col_changed && !cache->myParms.getRow_col())
+    else if (changedparms.myRow_col && !cache->myParms.getRow_col())
     {
         gdp->destroyPointAttrib("row_index");
         gdp->destroyPointAttrib("column_index");
     }
 
-    if (ret_data_changed && cache->myParms.getRet_data())
+    if (changedparms.myRet_data && cache->myParms.getRet_data())
     {
         if (reader.hasRetData(scan_index))
         {
@@ -2310,13 +2355,13 @@ readE57Scan(
             missing_attribs.append(UT_StringHolder("return data"));
         }
     }
-    else if (ret_data_changed && !cache->myParms.getRet_data())
+    else if (changedparms.myRet_data && !cache->myParms.getRet_data())
     {
         gdp->destroyPointAttrib("return_index");
         gdp->destroyPointAttrib("return_count");
     }
 
-    if (timestamp_changed && cache->myParms.getTimestamp())
+    if (changedparms.myTimestamp && cache->myParms.getTimestamp())
     {
         if (reader.hasTimestamp(scan_index))
         {
@@ -2332,7 +2377,7 @@ readE57Scan(
             missing_attribs.append(UT_StringHolder("timestamps"));
         }
     }
-    else if (timestamp_changed && !cache->myParms.getTimestamp())
+    else if (changedparms.myTimestamp && !cache->myParms.getTimestamp())
     {
         gdp->destroyPointAttrib("timestamp");
 
@@ -2342,7 +2387,7 @@ readE57Scan(
             gdp->destroyPointGroup(invalid_group);
     }
 
-    if (normals_changed && cache->myParms.getNormals())
+    if (changedparms.myNormals && cache->myParms.getNormals())
     {
         if (reader.hasNormals(scan_index))
         {
@@ -2355,14 +2400,14 @@ readE57Scan(
             missing_attribs.append(UT_StringHolder("surface normals"));
         }
     }
-    else if (normals_changed && !cache->myParms.getNormals())
+    else if (changedparms.myNormals && !cache->myParms.getNormals())
     {
         gdp->destroyNormalAttribute(GA_ATTRIB_POINT);
     }
 
-    if (clear_cache_required
+    if (changedparms.myClearCacheRequired
         || current_prefix != cache->myParms.getGroup_prefix()
-        || transforms_changed)
+        || changedparms.myRigidtransforms)
     {
         UT_WorkBuffer name(cache->myParms.getGroup_prefix().c_str());
         name.appendFormat("transform{}", scan_index + 1);
@@ -2383,7 +2428,7 @@ readE57Scan(
     }
 
     GA_PointGroup *scan_group = nullptr;
-    if (clear_cache_required)
+    if (changedparms.myClearCacheRequired)
     {
         UT_WorkBuffer group_name(current_prefix.c_str());
         group_name.appendFormat("{}", scan_index + 1);
@@ -2413,7 +2458,7 @@ readE57Scan(
         num_pts += SYSmin(range_good, remaining_pts);
     }
 
-    if (clear_cache_required)
+    if (changedparms.myClearCacheRequired)
         gdp->appendPointBlock(num_pts);
 
     sop_E57PointReader pt_reader(pt_reader_builder.build());
@@ -2421,7 +2466,7 @@ readE57Scan(
     GA_Range pt_range(
             gdp->getPointMap(), GA_Offset(pt_idx), GA_Offset(pt_idx + num_pts));
 
-    if (clear_cache_required)
+    if (changedparms.myClearCacheRequired)
         scan_group->setElement(pt_range, true);
 
     GA_Offset start, end;
@@ -2437,7 +2482,7 @@ readE57Scan(
 
     pt_idx += num_pts;
 
-    if (clear_cache_required && !rigid_body_transform.isIdentity())
+    if (changedparms.myClearCacheRequired && !rigid_body_transform.isIdentity())
         gdp->transformPoints(rigid_body_transform, scan_group, nullptr, true);
 
     return false;
@@ -2617,6 +2662,7 @@ SOP_LidarImportVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
     SOP_LidarImportCache *cache = static_cast<SOP_LidarImportCache *>(
             cookparms.cache()); //@REVIEW - some nodes use UTverify_cast?
 
+    // Set cook parameters
     UT_String filename;
     filename = sopparms.getFilename();
 
@@ -2627,7 +2673,6 @@ SOP_LidarImportVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
     int range_good = sopparms.getSelect_range()[0];
     int range_size = sopparms.getSelect_range()[1];
     int max_pts = sopparms.getMax_points();
-
     bool delete_invalid_pts = sopparms.getDelete_invalid();
 
     auto use_color = sopparms.getColor();
@@ -2648,59 +2693,63 @@ SOP_LidarImportVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
     }
 
     // See which parms have changed since the last cook.
-    bool file_changed = (filename != cache->myParms.getFilename());
+    sop_ChangedParms changedparms;
+    changedparms.myFilename = (filename != cache->myParms.getFilename());
 
     // Filter Params:
-    bool filter_changed = (filter_type != cache->myParms.getFilter_type());
-    bool range_parms_changed
+    changedparms.myFilter_type = (filter_type != cache->myParms.getFilter_type());
+    changedparms.mySelect_range
             = (range_good != cache->myParms.getSelect_range()[0])
               || (range_size != cache->myParms.getSelect_range()[1]);
 
-    bool max_pts_changed = (max_pts != cache->myParms.getMax_points());
+    changedparms.myMax_points = (max_pts != cache->myParms.getMax_points());
     switch (filter_type)
     {
     case Filter_type::RANGE_FILTER:
-        filter_changed |= range_parms_changed;
+        changedparms.myFilter_type |= changedparms.mySelect_range;
         break;
     case Filter_type::MAX_FILTER:
-        filter_changed |= max_pts_changed;
+        changedparms.myFilter_type |= changedparms.myMax_points;
         break;
     case Filter_type::NO_FILTER:
     default:
         break;
     }
-    bool delete_invalid_changed
+    changedparms.myDelete_invalid
             = (delete_invalid_pts != cache->myParms.getDelete_invalid());
 
     // Attribute Params:
-    bool color_changed = (use_color != cache->myParms.getColor());
-    bool intensity_changed = (use_intensity != cache->myParms.getIntensity());
-    bool row_col_changed = (use_row_col != cache->myParms.getRow_col());
-    bool ret_data_changed = (use_ret_data != cache->myParms.getRet_data());
-    bool timestamp_changed = (use_timestamp != cache->myParms.getTimestamp());
-    bool normals_changed = (use_normals != cache->myParms.getNormals());
-    bool transforms_changed
+    changedparms.myColor = (use_color != cache->myParms.getColor());
+    changedparms.myIntensity = (use_intensity != cache->myParms.getIntensity());
+    changedparms.myRow_col = (use_row_col != cache->myParms.getRow_col());
+    changedparms.myRet_data = (use_ret_data != cache->myParms.getRet_data());
+    changedparms.myTimestamp = (use_timestamp != cache->myParms.getTimestamp());
+    changedparms.myNormals = (use_normals != cache->myParms.getNormals());
+    changedparms.myRigidtransforms
             = (use_transforms != cache->myParms.getRigidtransforms());
-    bool names_changed = (use_names != cache->myParms.getScannames());
+    changedparms.myScannames = (use_names != cache->myParms.getScannames());
 
-    // Changed params which require re-reading the whole file:
-    bool clear_cache_required = file_changed || filter_changed
-                                || delete_invalid_changed || delete_invalid_pts;
+    // Changed params which require re-reading the entire file:
+    if (filename.matchFileExtension(".las")
+        || filename.matchFileExtension(".laz"))
+    {
+        changedparms.myClearCacheRequired = changedparms.myFilename
+                                            || changedparms.myFilter_type;
+    }
+    else if (filename.matchFileExtension(".e57"))
+    {
+        changedparms.myClearCacheRequired = changedparms.myFilename
+                                            || changedparms.myFilter_type
+                                            || changedparms.myDelete_invalid
+                                            || delete_invalid_pts;
+    }
 
-    if (clear_cache_required)
+    // Must re-read everything:
+    if (changedparms.myClearCacheRequired)
     {
         gdp->clearAndDestroy();
         cache->clearCache();
-
-        // Must re-read everything
-        color_changed = true;
-        intensity_changed = true;
-        row_col_changed = true;
-        ret_data_changed = true;
-        timestamp_changed = true;
-        normals_changed = true;
-        transforms_changed = true;
-        names_changed = true;
+        changedparms.setAllChangedTrue();
     }
 
     // Cache all params from this cook
@@ -2758,13 +2807,7 @@ SOP_LidarImportVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
             cookparms.sopAddError(
                     SOP_ERR_LIDAR_READER_ERROR, "Failed to open the file.");
         }
-        else if (!readLASFile(
-			    stream, boss, cookparms, gdp, 
-			    clear_cache_required,
-			    color_changed, 
-			    intensity_changed, 
-			    ret_data_changed,
-			    timestamp_changed))
+        else if (!readLASFile(stream, boss, cookparms, gdp, changedparms))
         {
             cookparms.sopAddError(
                     SOP_ERR_LIDAR_READER_ERROR,
@@ -2805,7 +2848,7 @@ SOP_LidarImportVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
                     return;
                 }
 
-                if (clear_cache_required)
+                if (changedparms.myClearCacheRequired)
                 {
                     UT_StringHolder group_name(reader.getScanGroupGuid(i));
                     cache->myScanGroupMap[group_name].append(i);
@@ -2815,14 +2858,7 @@ SOP_LidarImportVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
                 stop_cook |= readE57Scan(
 			cookparms, cache, gdp,
                         i, idx, reader, boss, scan_missing_attribs,
-                        clear_cache_required,
-			color_changed,
-			intensity_changed,
-                        row_col_changed,
-			ret_data_changed,
-			timestamp_changed,
-                        normals_changed,
-			transforms_changed,
+                        changedparms,
 			prefix,
                         max_pts_in_scans(i));
 
@@ -2876,7 +2912,7 @@ SOP_LidarImportVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
 
             cache->myParms.setGroup_prefix(prefix);
 
-            if (color_changed
+            if (changedparms.myColor
                 && cache->myParms.getColor() == Color::FROM_IMAGES)
             {
                 int num_images = reader.getNumImages();
@@ -2923,7 +2959,7 @@ SOP_LidarImportVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
                 gdp->destroyPoints(GA_Range(invalid_pts));
             }
 
-            if (names_changed)
+            if (changedparms.myScannames)
             {
                 if (!cache->myParms.getScannames())
                 {
@@ -2958,5 +2994,3 @@ SOP_LidarImportVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
         return;
     }
 }
-
-
