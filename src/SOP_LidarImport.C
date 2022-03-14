@@ -688,9 +688,9 @@ LASReader::getScanAngle(fpreal32 &in) const
 bool
 readLASFile(
         std::istream &stream,
+        GU_Detail *gdp,
         UT_AutoInterrupt &boss,
         const SOP_NodeVerb::CookParms &cookparms,
-        GU_Detail *gdp,
 	const sop_ChangedParms& changedparms)
 {
     using namespace SOP_LidarImportEnums;
@@ -2192,19 +2192,21 @@ E57Reader::computePointProjection(int idx, const UT_Vector4 pos,
 
 bool
 readE57Scan(
-	    const SOP_NodeVerb::CookParms& cookparms,
-	    SOP_LidarImportCache *cache,
 	    GU_Detail *gdp,
+	    UT_AutoInterrupt &boss,
+	    const SOP_NodeVerb::CookParms& cookparms,
+	    UT_StringHolder current_prefix,
+            const sop_ChangedParms &changedparms,
+	    UT_StringArray &missing_attribs,
+	    E57Reader &reader,
 	    int scan_index,
 	    int64 &pt_idx,
-	    E57Reader &reader,
-	    UT_AutoInterrupt &boss,
-	    UT_StringArray &missing_attribs,
-	    const sop_ChangedParms &changedparms,
-	    UT_StringHolder current_prefix,
 	    exint scan_max_pts)
 {
     using namespace SOP_LidarImportEnums;
+    SOP_LidarImportCache *cache
+            = static_cast<SOP_LidarImportCache *>(cookparms.cache());
+
     UT_Matrix4 rigid_body_transform(reader.getScanRBXForm(scan_index));
 
     bool read_file_required = false;
@@ -2650,6 +2652,191 @@ updateColourFromImage(
 
     return false;
 }
+
+// Reads E57 file into the detail, by calling readE57Scan N-number of times.
+void 
+readE57File(
+        const SOP_NodeVerb::CookParms &cookparms,
+        GU_Detail *gdp,
+        UT_AutoInterrupt &boss,
+        const sop_ChangedParms &changedparms,
+        UT_StringHolder current_prefix)
+{
+    using namespace SOP_LidarImportEnums;
+    SOP_LidarImportCache *cache
+            = static_cast<SOP_LidarImportCache *>(cookparms.cache());
+
+    try
+        {
+            E57Reader reader(cache->myParms.getFilename().c_str());
+
+            int num_scans = reader.getNumScans();
+
+            int64 idx = 0;
+            bool stop_cook = false;
+            UT_StringMap<UT_IntArray> missing_attrib_map;
+            UT_StringArray file_missing_attribs;
+
+            exint pts_in_file = reader.getPointsInFile();
+            UT_ExintArray max_pts_in_scans;
+            max_pts_in_scans.setCapacity(num_scans);
+
+            for (int i = 0; i < num_scans; ++i)
+            {
+                fpreal64 scan_proportion = fpreal64(reader.getPointsInScan(i))
+                                           / pts_in_file;
+                max_pts_in_scans.append(cache->myParms.getMax_points() * scan_proportion);
+            }
+
+            for (int i = 0; i < num_scans && !stop_cook; ++i)
+            {
+                if (boss.wasInterrupted())
+                {
+                    cache->clearCache();
+                    return;
+                }
+
+                if (changedparms.myClearCacheRequired)
+                {
+                    UT_StringHolder group_name(reader.getScanGroupGuid(i));
+                    cache->myScanGroupMap[group_name].append(i);
+		}
+
+                UT_StringArray scan_missing_attribs;
+                stop_cook |= readE57Scan(
+                        gdp, boss, cookparms, current_prefix, changedparms,
+                        scan_missing_attribs, reader, i, idx,
+                        max_pts_in_scans(i));
+
+                if (scan_missing_attribs.entries() != 0)
+                {
+                    for (int j = 0, nj = scan_missing_attribs.entries(); j < nj;
+                         ++j)
+                    {
+                        missing_attrib_map[scan_missing_attribs(j)].append(i);
+
+                        if (file_missing_attribs.find(scan_missing_attribs(j))
+                            == -1)
+                            file_missing_attribs.append(
+                                    scan_missing_attribs(j));
+                    }
+                }
+            }
+
+            if (file_missing_attribs.entries() != 0)
+            {
+                UT_WorkBuffer warning_msg;
+                for (int i = 0, ni = file_missing_attribs.entries(); i < ni;
+                     ++i)
+                {
+                    UT_StringRef attrib(file_missing_attribs(i));
+                    UT_IntArray &scans_without_attrib
+                            = missing_attrib_map[attrib];
+
+                    warning_msg.append("- ");
+                    warning_msg.append(attrib);
+                    warning_msg.append(" in scan");
+
+                    if (scans_without_attrib.entries() > 1)
+                        warning_msg.append("s");
+
+                    for (int j = 0, nj = scans_without_attrib.entries(); j < nj;
+                         ++j)
+                    {
+                        warning_msg.appendFormat(
+                                " {}", scans_without_attrib(j) + 1);
+                        if (j < nj - 1)
+                            warning_msg.append(",");
+                    }
+
+                    warning_msg.append('\n');
+                }
+
+                cookparms.sopAddWarning(
+                        SOP_WARN_ATTRIBS_NOT_FOUND, warning_msg.buffer());
+            }
+
+            if (changedparms.myColor
+                && cache->myParms.getColor() == Color::FROM_IMAGES)
+            {
+                int num_images = reader.getNumImages();
+
+                for (int i = 0; i < num_images && !stop_cook; ++i)
+                {
+                    if (boss.wasInterrupted())
+                    {
+                        cache->clearCache();
+                        return;
+                    }
+
+                    stop_cook |= 
+			updateColourFromImage(i, reader, boss, gdp, cache);
+                }
+
+                // Delete internal attribute once everything's done
+                gdp->destroyPointAttrib(GA_SCOPE_PRIVATE, "__num_colors__");
+            }
+
+            if (cache->myParms.getDelete_invalid())
+            {
+                GA_PointGroup invalid_pts(*gdp);
+
+                const char *grp_namelist[] = {
+                        "e57_invalid_pos",
+                        "e57_invalid_color",
+                        "e57_invalid_intensity",
+                        "e57_invalid_timestamp",
+                        nullptr,
+                };
+
+                UT_StringArray invalid_groups(grp_namelist);
+
+                for (int i = 0, ni = invalid_groups.entries(); i < ni; ++i)
+                {
+                    GA_PointGroup *invalid_grp
+                            = gdp->findPointGroup(invalid_groups(i).c_str());
+
+                    if (invalid_grp)
+                        invalid_pts |= *invalid_grp;
+                }
+
+                gdp->destroyPoints(GA_Range(invalid_pts));
+            }
+
+            if (changedparms.myScannames)
+            {
+                if (!cache->myParms.getScannames())
+                {
+                    gdp->destroyAttribute(GA_ATTRIB_GLOBAL, "scannames");
+                }
+                else
+                {
+                    UT_StringArray names(num_scans, num_scans);
+                    for (int i = 0; i < num_scans; ++i)
+                        names(i) = reader.getScanName(i);
+
+                    GA_RWHandleSA names_h(
+                            gdp->addStringArray(GA_ATTRIB_GLOBAL, "scannames"));
+                    names_h.set(GA_Offset(0), names);
+                }
+            }
+        }
+#ifdef E57_SOP_VERBOSE
+        catch (e57::E57Exception &e)
+        {
+            std::string context = e.context();
+            addError(SOP_ERR_LIDAR_READER_ERROR, context.c_str());
+            e.report(__FILE__, __LINE__, __FUNCTION__);
+        }
+#else
+        catch (e57::E57Exception &e)
+        {
+            std::string context = e.context();
+            cookparms.sopAddError(SOP_ERR_LIDAR_READER_ERROR, context.c_str());
+        }
+#endif
+        return;
+}
 } // namespace
 
 void
@@ -2666,8 +2853,8 @@ SOP_LidarImportVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
     UT_String filename;
     filename = sopparms.getFilename();
 
-    UT_String prefix;
-    prefix = sopparms.getGroup_prefix();
+    UT_String current_prefix;
+    current_prefix = sopparms.getGroup_prefix();
 
     auto filter_type = sopparms.getFilter_type();
     int range_good = sopparms.getSelect_range()[0];
@@ -2685,8 +2872,8 @@ SOP_LidarImportVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
     bool use_names = sopparms.getScannames();
 
     if (cookparms.error()->getSeverity() >= UT_ERROR_ABORT
-        || !filename.isstring() || !prefix.isstring()
-        || thissop->forceValidGroupPrefix(prefix, UT_ERROR_ABORT))
+        || !filename.isstring() || !current_prefix.isstring()
+        || thissop->forceValidGroupPrefix(current_prefix, UT_ERROR_ABORT))
     {
         cache->clearCache();
         return;
@@ -2777,16 +2964,12 @@ SOP_LidarImportVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
         UT_StringArray inapplicable_parms;
         if (use_color == Color::FROM_IMAGES)
             inapplicable_parms.append("Color From Images");
-
         if (delete_invalid_pts)
             inapplicable_parms.append("Delete Invalid Points");
-
         if (use_row_col)
             inapplicable_parms.append("Row and Column");
-
         if (use_normals)
             inapplicable_parms.append("Surface Normals");
-
         if (inapplicable_parms.entries() != 0)
         {
             UT_WorkBuffer warning_msg;
@@ -2807,7 +2990,7 @@ SOP_LidarImportVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
             cookparms.sopAddError(
                     SOP_ERR_LIDAR_READER_ERROR, "Failed to open the file.");
         }
-        else if (!readLASFile(stream, boss, cookparms, gdp, changedparms))
+        else if (!readLASFile(stream, gdp, boss, cookparms, changedparms))
         {
             cookparms.sopAddError(
                     SOP_ERR_LIDAR_READER_ERROR,
@@ -2816,181 +2999,11 @@ SOP_LidarImportVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
         return;
     }
 
+    // E57 :
     if (filename.matchFileExtension(".e57"))
     {
-        try
-        {
-            E57Reader reader(filename.c_str());
-
-            int num_scans = reader.getNumScans();
-
-            int64 idx = 0;
-            bool stop_cook = false;
-            UT_StringMap<UT_IntArray> missing_attrib_map;
-            UT_StringArray file_missing_attribs;
-
-            exint pts_in_file = reader.getPointsInFile();
-            UT_ExintArray max_pts_in_scans;
-            max_pts_in_scans.setCapacity(num_scans);
-
-            for (int i = 0; i < num_scans; ++i)
-            {
-                fpreal64 scan_proportion = fpreal64(reader.getPointsInScan(i))
-                                           / pts_in_file;
-                max_pts_in_scans.append(max_pts * scan_proportion);
-            }
-
-            for (int i = 0; i < num_scans && !stop_cook; ++i)
-            {
-                if (boss.wasInterrupted())
-                {
-                    cache->clearCache();
-                    return;
-                }
-
-                if (changedparms.myClearCacheRequired)
-                {
-                    UT_StringHolder group_name(reader.getScanGroupGuid(i));
-                    cache->myScanGroupMap[group_name].append(i);
-		}
-
-                UT_StringArray scan_missing_attribs;
-                stop_cook |= readE57Scan(
-			cookparms, cache, gdp,
-                        i, idx, reader, boss, scan_missing_attribs,
-                        changedparms,
-			prefix,
-                        max_pts_in_scans(i));
-
-                if (scan_missing_attribs.entries() != 0)
-                {
-                    for (int j = 0, nj = scan_missing_attribs.entries(); j < nj;
-                         ++j)
-                    {
-                        missing_attrib_map[scan_missing_attribs(j)].append(i);
-
-                        if (file_missing_attribs.find(scan_missing_attribs(j))
-                            == -1)
-                            file_missing_attribs.append(
-                                    scan_missing_attribs(j));
-                    }
-                }
-            }
-
-            if (file_missing_attribs.entries() != 0)
-            {
-                UT_WorkBuffer warning_msg;
-                for (int i = 0, ni = file_missing_attribs.entries(); i < ni;
-                     ++i)
-                {
-                    UT_StringRef attrib(file_missing_attribs(i));
-                    UT_IntArray &scans_without_attrib
-                            = missing_attrib_map[attrib];
-
-                    warning_msg.append("- ");
-                    warning_msg.append(attrib);
-                    warning_msg.append(" in scan");
-
-                    if (scans_without_attrib.entries() > 1)
-                        warning_msg.append("s");
-
-                    for (int j = 0, nj = scans_without_attrib.entries(); j < nj;
-                         ++j)
-                    {
-                        warning_msg.appendFormat(
-                                " {}", scans_without_attrib(j) + 1);
-                        if (j < nj - 1)
-                            warning_msg.append(",");
-                    }
-
-                    warning_msg.append('\n');
-                }
-
-                cookparms.sopAddWarning(
-                        SOP_WARN_ATTRIBS_NOT_FOUND, warning_msg.buffer());
-            }
-
-            cache->myParms.setGroup_prefix(prefix);
-
-            if (changedparms.myColor
-                && cache->myParms.getColor() == Color::FROM_IMAGES)
-            {
-                int num_images = reader.getNumImages();
-
-                for (int i = 0; i < num_images && !stop_cook; ++i)
-                {
-                    if (boss.wasInterrupted())
-                    {
-                        cache->clearCache();
-                        return;
-                    }
-
-                    stop_cook |= 
-			updateColourFromImage(i, reader, boss, gdp, cache);
-                }
-
-                // Delete internal attribute once everything's done
-                gdp->destroyPointAttrib(GA_SCOPE_PRIVATE, "__num_colors__");
-            }
-
-            if (delete_invalid_pts)
-            {
-                GA_PointGroup invalid_pts(*gdp);
-
-                const char *grp_namelist[] = {
-                        "e57_invalid_pos",
-                        "e57_invalid_color",
-                        "e57_invalid_intensity",
-                        "e57_invalid_timestamp",
-                        nullptr,
-                };
-
-                UT_StringArray invalid_groups(grp_namelist);
-
-                for (int i = 0, ni = invalid_groups.entries(); i < ni; ++i)
-                {
-                    GA_PointGroup *invalid_grp
-                            = gdp->findPointGroup(invalid_groups(i).c_str());
-
-                    if (invalid_grp)
-                        invalid_pts |= *invalid_grp;
-                }
-
-                gdp->destroyPoints(GA_Range(invalid_pts));
-            }
-
-            if (changedparms.myScannames)
-            {
-                if (!cache->myParms.getScannames())
-                {
-                    gdp->destroyAttribute(GA_ATTRIB_GLOBAL, "scannames");
-                }
-                else
-                {
-                    UT_StringArray names(num_scans, num_scans);
-                    for (int i = 0; i < num_scans; ++i)
-                        names(i) = reader.getScanName(i);
-
-                    GA_RWHandleSA names_h(
-                            gdp->addStringArray(GA_ATTRIB_GLOBAL, "scannames"));
-                    names_h.set(GA_Offset(0), names);
-                }
-            }
-        }
-#ifdef E57_SOP_VERBOSE
-        catch (e57::E57Exception &e)
-        {
-            std::string context = e.context();
-            addError(SOP_ERR_LIDAR_READER_ERROR, context.c_str());
-            e.report(__FILE__, __LINE__, __FUNCTION__);
-        }
-#else
-        catch (e57::E57Exception &e)
-        {
-            std::string context = e.context();
-            cookparms.sopAddError(SOP_ERR_LIDAR_READER_ERROR, context.c_str());
-        }
-#endif
-        return;
+	// All SOP warnings and errors are handled in the E57 read functions.
+        readE57File(cookparms, gdp, boss, changedparms, current_prefix);
+        cache->myParms.setGroup_prefix(current_prefix);
     }
 }
