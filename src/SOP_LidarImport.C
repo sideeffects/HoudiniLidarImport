@@ -2950,11 +2950,10 @@ SOP_LidarImportVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
                     SOP_ERR_LIDAR_READER_ERROR,
                     "Failed to read the file as a valid LAS format.");
         }
-        return;
     }
 
     // E57 :
-    if (filename.matchFileExtension(".e57"))
+    else if (filename.matchFileExtension(".e57"))
     {
 	// All SOP warnings and errors are handled in the E57 read functions.
         readE57File(cookparms, gdp, boss);
