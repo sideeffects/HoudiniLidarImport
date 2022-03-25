@@ -3,6 +3,7 @@
 #internal: lidarimport
 #icon:     SOP/lidarimport
 #since: 16.0
+#verb_since: 19.5
 
 = Lidar Import =
 
@@ -19,6 +20,18 @@ TIP:
 TIP:
     To work with the point cloud as a VDB primitive, you can use the [Convert VDB Points SOP|Node:sop/convertvdbpoints].
 
+== Available position storage types == (types)
+
+table>>
+    tr>>
+        td>>`real32`
+        td>>32 bit float (4 bytes), about 7 decimal digits of precision.
+        td>>Maximum value about 10<sup>38</sup>
+    tr>>
+        td>>`real64`
+        td>>64 bit float (8 bytes), about 15 decimal digits of precision.
+        td>>maximum value about 10<sup>308</sup>
+
 @parameters
 
 File:
@@ -28,6 +41,10 @@ File:
 Group Prefix:
     #id: group_prefix
     The prefix of the created groups, which represent separate scans stored in the file. Applies to E57 files only, as LAS and LAZ are single-scan formats.
+
+Precision:
+    #id: precision
+    The storage type for the positions. See [available types|#types] above.
 
 == Filtering ==
 
