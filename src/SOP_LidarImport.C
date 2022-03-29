@@ -1730,7 +1730,7 @@ public:
     UT_StringHolder getScanGroupGuid(int idx);
     UT_StringHolder getImageAssociatedScanGuid(int idx);
 
-    void computePointProjection(int idx, const UT_Vector4 pos, 
+    void computePointProjection(int idx, const UT_Vector4D pos, 
 	    exint &img_x, exint &img_y) const;
 
     bool hasCartesian(int idx) const
@@ -2273,7 +2273,7 @@ E57Reader::getImageAssociatedScanGuid(int idx)
 }
 
 void
-E57Reader::computePointProjection(int idx, const UT_Vector4 pos, 
+E57Reader::computePointProjection(int idx, const UT_Vector4D pos, 
 					      exint &img_x, exint &img_y) const
 {
     const sop_ImageInfo &image = myImages(idx);
@@ -2633,7 +2633,7 @@ public:
             const PXL_Raster *raster,
             const E57Reader &reader,
             int img_idx,
-            const UT_Matrix4 rbxform_inv)
+            const UT_Matrix4D rbxform_inv)
         : myCache(cache)
         , myColorAttrib(c_attr)
         , myNumColorsAttrib(nc_attr)
@@ -2666,7 +2666,7 @@ public:
 
             for (GA_Offset ptoff = start; ptoff < end; ++ptoff)
             {
-                UT_Vector4 pos(myHandlePV3.get(ptoff));
+                UT_Vector4D pos(myHandlePV3.get(ptoff));
                 pos *= myRBXFormInv;
 
                 exint img_x, img_y;
@@ -2713,8 +2713,8 @@ private:
     const PXL_Raster *myRaster;
     const E57Reader &myReader;
     const int myImageIndex;
-    const UT_Matrix4 myRBXFormInv;
-    GA_ROHandleV3 myHandlePV3;
+    const UT_Matrix4D myRBXFormInv;
+    GA_ROHandleV3D myHandlePV3;
 };
 
 bool
@@ -2729,8 +2729,8 @@ updateColourFromImage(
     SOP_LidarImportCache *cache
             = static_cast<SOP_LidarImportCache *>(cookparms.cache());
 
-    UT_Matrix4 rigid_body_transform_inv(reader.getImageRBXForm(image_index));
-    rigid_body_transform_inv.invertDouble();
+    UT_Matrix4D rigid_body_transform_inv(reader.getImageRBXForm(image_index));
+    rigid_body_transform_inv.invert();
 
     UT_UniquePtr<unsigned char[]> image_buffer = reader.getImageBuffer(
             image_index, false);
