@@ -46,6 +46,62 @@ Precision:
     #id: precision
     The storage type for the positions. See [available types|#types] above.
 
+== Transform ==
+
+Transform Order:
+    #id: xOrd
+    Order in which transformations occur.
+
+Rotate Order:
+    #id: rOrd
+    Order in which rotations occur.
+
+Translate:
+    #id: t
+    Amount of translation along xyz axes.
+
+Rotate:
+    #id: r
+    Amount of rotation along xyz axes.
+
+Scale:
+    #id: s
+    Non-uniform scaling along xyz axes.
+
+Shear:
+    #id: shear
+    Amount of shearing. The three values represent shearing in the X direction on the XY plane, in the X direction on the XZ plane, and in the Y direction on the YZ plane, respectively.
+
+Uniform Scale:
+    #id: scale
+    Uniform scaling.
+
+Pivot Translate:
+    #id: p
+    The local pivot space’s translation value for transformations.
+
+Pivot Rotation:
+    #id: pr
+    The local pivot space’s rotation value for transformations.
+
+Centroid:
+    #id: centroid
+    The centroid value used by the "Move" buttons.
+
+    Using Metadata Centroid:
+        Use the file metadata bounding box center. Filtered import variations will have an identical centroid value.
+
+    Using Calculated Centroid:
+        Compute the bounding box of the imported points, and use its center. This setting is recommended if the file has incorrect bounding box metadata.
+
+Move Centroid to Origin:
+    #id: movecentroid
+    Move the centroid to the origin. The centroid is set as the bounding box center.
+
+Move Pivot to Centroid:
+    #id: movepivot
+    Move the pivot to the centroid. The centroid is set as the bounding box center.
+
 == Filtering ==
 
 Filter Type:

@@ -52,6 +52,7 @@
 #include <UT/UT_Matrix4.h>
 #include <UT/UT_Quaternion.h>
 #include <UT/UT_String.h>
+#include <UT/UT_UndoManager.h>
 #include <UT/UT_UniquePtr.h>
 #include <UT/UT_VectorTypes.h>
 
@@ -92,6 +93,200 @@ static const char *theDsFile = R"THEDSFILE(
             "32"        "32-bit"
             "64"        "64-bit"
         }
+    }
+        groupsimple {
+	name	    "transform"
+	label	    "Transform"
+	grouptag    { "group_type" "simple" }
+
+    parm {
+	name	"xOrd"
+	label	"Transform Order"
+	type	ordinal
+	joinnext
+	default	{ "srt" }
+	menu	{
+	    "srt"	"Scale Rot Trans"
+	    "str"	"Scale Trans Rot"
+	    "rst"	"Rot Scale Trans"
+	    "rts"	"Rot Trans Scale"
+	    "tsr"	"Trans Scale Rot"
+	    "trs"	"Trans Rot Scale"
+	}
+    }
+    parm {
+	name	"rOrd"
+	label	"Rotate Order"
+	type	ordinal
+	nolabel
+	default	{ "xyz" }
+	menu	{
+	    "xyz"	"Rx Ry Rz"
+	    "xzy"	"Rx Rz Ry"
+	    "yxz"	"Ry Rx Rz"
+	    "yzx"	"Ry Rz Rx"
+	    "zxy"	"Rz Rx Ry"
+	    "zyx"	"Rz Ry Rx"
+	}
+    }
+    parm {
+	name	"t"
+	label	"Translate"
+	type	vector
+	size	3
+	default	{ "0" "0" "0" }
+	range	{ -1 1 }
+	parmtag	{ "autoscope" "1111111111111111111111111111111" }
+    }
+    parm {
+	name	"r"
+	label	"Rotate"
+	type	vector
+	size	3
+	default	{ "0" "0" "0" }
+	range	{ 0 360 }
+	parmtag	{ "autoscope" "1111111111111111111111111111111" }
+    }
+    parm {
+	name	"s"
+	label	"Scale"
+	type	vector
+	size	3
+	default	{ "1" "1" "1" }
+	range	{ -1 1 }
+	parmtag	{ "autoscope" "1111111111111111111111111111111" }
+    }
+    parm {
+	name	"shear"
+	label	"Shear"
+	type	float
+	size	3
+	default	{ "0" "0" "0" }
+	range	{ 0 10 }
+    }
+    parm {
+	name	"scale"
+	label	"Uniform Scale"
+	type	float
+	default	{ "1" }
+	range	{ 0 10 }
+    }
+    } // Transform
+    groupcollapsible {
+        name	    "parmgroup_pivotxform"
+        label	    "Pivot Transform"
+        grouptag    { "group_type" "collapsible" }
+
+	parm {
+	    name	"p"
+	    label	"Pivot Translate"
+	    type	vector
+	    size	3
+	    default	{ "0" "0" "0" }
+	    range	{ -1 1 }
+	}
+	parm {
+	    name	"pr"
+	    label	"Pivot Rotate"
+	    type	vector
+	    size	3
+	    default	{ "0" "0" "0" }
+	    range	{ 0 360 }
+	}
+    } // Pivot Transform
+    groupcollapsible {
+        name	    "parmgroup_prexform"
+        label	    "Pre-Transform"
+        grouptag    { "group_type" "collapsible" }
+
+	parm {
+	    name	"prexform_xOrd"
+	    label	"Pre-Transform Order"
+	    type	ordinal
+	    default	{ "srt" }
+	    menu	{
+		"srt"	"Scale Rot Trans"
+		"str"	"Scale Trans Rot"
+		"rst"	"Rot Scale Trans"
+		"rts"	"Rot Trans Scale"
+		"tsr"	"Trans Scale Rot"
+		"trs"	"Trans Rot Scale"
+	    }
+	    joinnext
+	}
+	parm {
+	    name	"prexform_rOrd"
+	    label	"Pre-Rotate Order"
+	    type	ordinal
+	    nolabel
+	    default	{ "xyz" }
+	    menu	{
+		"xyz"	"Rx Ry Rz"
+		"xzy"	"Rx Rz Ry"
+		"yxz"	"Ry Rx Rz"
+		"yzx"	"Ry Rz Rx"
+		"zxy"	"Rz Rx Ry"
+		"zyx"	"Rz Ry Rx"
+	    }
+	}
+	parm {
+	    name	"prexform_t"
+	    label	"Pre-Translate"
+	    type	vector
+	    size	3
+	    default	{ 0 0 0 }
+	}
+	parm {
+	    name	"prexform_r"
+	    label	"Pre-Rotate"
+	    type	vector
+	    size	3
+	    default	{ 0 0 0 }
+	}
+	parm {
+	    name	"prexform_s"
+	    label	"Pre-Scale"
+	    type	vector
+	    size	3
+	    default	{ 1 1 1 }
+	}
+	parm {
+	    name	"prexform_shear"
+	    label	"Pre-Shear"
+	    type	float
+	    size	3
+	    default	{ "0" "0" "0" }
+	    range	{ 0 10 }
+	}
+    } // Pre-Transform
+    parm {
+	    name    "centroid"
+	    label   "Centroid"
+	    type    ordinal
+            nolabel
+            joinnext
+	    default { "0" }
+	    menu {
+		    "metadata" "Using Metadata Centroid"
+		    "calculated" "Using Calculated Centroid"
+	    }
+    }
+    parm {
+	name	"movecentroid"
+	label	"Move Centroid to Origin"
+	type	button
+        nolabel
+        joinnext
+	default	{ "0" }
+	range	{ 0 1 }
+    }
+    parm {
+    	name	"movepivot"
+    	label	"Move Pivot to Centroid"
+    	type	button
+        nolabel
+    	default	{ "0" }
+    	range	{ 0 1 }
     }
         groupsimple {
 	name	    "filtering"
@@ -210,40 +405,84 @@ SOP_LidarImport::cookMySop(OP_Context &context)
 class SOP_LidarImportCache : public SOP_NodeCache
 {
 public:
-    SOP_LidarImportCache() : SOP_NodeCache() {}
+    SOP_LidarImportCache() 
+        : SOP_NodeCache()
+        , myPositionBoxIsUpdated(false)
+    {
+        myFileMetadataBox.initBounds();
+        myPositionBox.initBounds();
+    }
+
     ~SOP_LidarImportCache() override {}
 
-    const SOP_LidarImportParms &getParms() const { return myParms; }
+    const SOP_LidarImportParms &getCachedParms() const { return myParms; }
     UT_StringMap<UT_IntArray> &getScanGroupMap() { return myScanGroupMap; }
 
     GA_Attribute *getDetachedPosition() { return myPosition.get(); }
+    GA_Attribute *getDetachedNormals() { return myNormals.get(); }
     const GA_Attribute *getDetachedPosition() const { return myPosition.get(); }
+    const GA_Attribute *getDetachedNormals() const { return myNormals.get(); }
 
-    // Binds the detached position attribute. This should be called after the
-    // detail's point capacity has been set. 
+    const UT_BoundingBoxD &getFileBBox() const { return myFileMetadataBox; }
+    const UT_BoundingBoxD &getPointBBox() const { return myPositionBox; }
+    void setFileBBox(const UT_BoundingBoxD &bbox) { myFileMetadataBox = bbox; }
+
+    bool isPointBBoxUpdated() const { return myPositionBoxIsUpdated; }
+
+    // Binds the detached position attribute.
+    // This should be called after the detail's point capacity has been set.
     void bindDetachedPosition(const GA_Detail &gdp)
-    { 
+    {
         myPosition = gdp.createDetachedTupleAttribute(
                 GA_ATTRIB_POINT, GA_STORE_REAL64, 3);
         myPosition->setTypeInfo(GA_TYPE_POINT);
     }
 
-    void clearCache() 
-    { 
-	myParms = SOP_LidarImportParms();
-        myScanGroupMap.clear();
-        myPosition.reset();
+    // Binds a detached point normal attribute.
+    // This should be called after the detail's point capacity has been set.
+    void bindDetachedNormals(GEO_Detail &gdp)
+    {
+        myNormals = gdp.createDetachedTupleAttribute(
+                GA_ATTRIB_POINT, GA_STORE_REAL32, 3);
+        myNormals->setTypeInfo(GA_TYPE_NORMAL);
     }
 
-    void updateCache(const SOP_LidarImportParms& sopparms)
+    void destroyDetachedNormals() { myNormals.reset(); }
+
+    void updateCachedParms(const SOP_LidarImportParms &sopparms)
     {
         myParms = sopparms;
     }
 
+    void clearCache()
+    {
+        myParms = SOP_LidarImportParms();
+        myScanGroupMap.clear();
+        myPosition.reset();
+        myNormals.reset();
+        myFileMetadataBox.initBounds();
+        myPositionBox.initBounds();
+        myPositionBoxIsUpdated = false;
+    }
+
+    void updatePointBBox();
+
 private:
+    class PointBoundsComputer;
+
     SOP_LidarImportParms myParms;
     UT_StringMap<UT_IntArray> myScanGroupMap;
     GA_ATINumericUPtr myPosition;
+    GA_ATINumericUPtr myNormals;
+
+    // The bounding box of the file, provided by its metadata.
+    // These bounds are the original positions (i.e. untransformed).
+    UT_BoundingBoxD myFileMetadataBox;
+
+    // The bounding box of detached position attribute.
+    // These bounds correspond to the original positions (i.e. untransformed).
+    UT_BoundingBoxD myPositionBox;
+    bool myPositionBoxIsUpdated;
 };
 
 class SOP_LidarImportVerb : public SOP_NodeVerb
@@ -275,6 +514,12 @@ PRM_Template*
 SOP_LidarImport::buildTemplates()
 {
     static PRM_TemplateBuilder templ("SOP_LidarImport.C"_sh, theDsFile);
+    if (templ.justBuilt())
+    {
+        templ.setNoCook("centroid", true);
+        templ.setCallback("movecentroid", &moveCentroidToOriginCB);
+        templ.setCallback("movepivot", &movePivotToCentroidCB);
+    }
     return templ.templates();
 }
 
@@ -306,6 +551,71 @@ void
 newSopOperator(OP_OperatorTable *table)
 {
     SOP_LidarImport::installSOP(table);
+}
+
+class SOP_LidarImportCache::PointBoundsComputer
+{
+public:
+    PointBoundsComputer(GA_Attribute &attrib) : myAttrib(&attrib)
+    {
+        myBox.initBounds();
+    }
+
+    PointBoundsComputer(const PointBoundsComputer &that, UT_Split)
+        : myAttrib(that.myAttrib)
+    {
+        myBox.initBounds();
+    }
+
+    void operator()(const GA_SplittableRange &r)
+    {
+        char bcnt = 0;
+        UT_Interrupt *boss = UTgetInterrupt();
+
+        GA_ROPageHandleV3D handle(myAttrib);
+
+        GA_Offset start;
+        GA_Offset end;
+        for (GA_Iterator it = r.begin(); it.blockAdvance(start, end);)
+        {
+            if (!bcnt++ && boss->opInterrupt())
+                break;
+
+            handle.setPage(start);
+            GA_PageOff rstart = GAgetPageOff(start);
+            GA_PageOff rend = GAgetPageOff(end - 1) + 1;
+            for (GA_PageOff off = rstart; off < rend; ++off)
+            {
+                myBox.enlargeBounds(handle.valueRelative(off));
+            }
+        }
+    }
+
+    void join(const PointBoundsComputer &other)
+    {
+        myBox.enlargeBounds(other.myBox);
+    }
+
+    const UT_BoundingBoxD &getBox() const { return myBox; }
+
+private:
+    UT_BoundingBoxD myBox;
+    const GA_Attribute *myAttrib;
+};
+
+// Updates the detached position bounding box.
+void
+SOP_LidarImportCache::updatePointBBox()
+{
+    // No current position
+    if (!myPosition)
+        return;
+
+    PointBoundsComputer first(*myPosition);
+    UTparallelReduce(
+            GA_SplittableRange(myPosition->getDetail().getPointRange()), first);
+    myPositionBox = first.getBox();
+    myPositionBoxIsUpdated = true;
 }
 
 //******************************************************************************
@@ -674,6 +984,7 @@ struct sop_ScanInfo
     UT_StringHolder		myGuid;
     exint			myNumPoints;
     UT_StringHolder             myName;
+    UT_BoundingBoxD             myMetadataBox;
 
     sop_AvailableE57Attribs	myAvailableAttribs;
 };
@@ -1145,12 +1456,12 @@ sop_E57PointReader::Builder::timestampInvalid()
 void
 sop_E57PointReader::Builder::normals()
 {
-    GA_Attribute *attrib = myGdp->addNormalAttribute(GA_ATTRIB_POINT);
+    myGdp->addNormalAttribute(GA_ATTRIB_POINT);
     const char *e57_names[] = { "nor:normalX", "nor:normalY", "nor:normalZ", 
 	nullptr };
 
-    myBufferInfos.append(new sop_E57BufferInfoV3T<fpreal32>(e57_names, attrib, 
-		myGdp));
+    myBufferInfos.append(new sop_E57BufferInfoV3T<fpreal32>(
+            e57_names, myCache->getDetachedNormals(), myGdp));
 }
 
 sop_E57PointReader
@@ -1329,14 +1640,13 @@ public:
     E57Reader(const char *filename);
     virtual ~E57Reader() {}
 
-    int getNumScans() const;
-    int getNumImages() const;
-
-    exint getPointsInFile() const;
-    exint getPointsInScan(int idx) const;
-
-    UT_Matrix4D getScanRBXForm(int idx) const;
-    UT_Matrix4D getImageRBXForm(int idx) const;
+    int getNumScans() const { return myScans.entries(); }
+    int getNumImages() const { return myImages.entries(); }
+    exint getPointsInFile() const { return myPointsInFile; }
+    exint getPointsInScan(int idx) const { return myScans(idx).myNumPoints; }
+    UT_BoundingBoxD getBoundingBox(int idx) const { return myScans(idx).myMetadataBox; }
+    UT_Matrix4D getScanRBXForm(int idx) const { return myScans(idx).myRBXForm; }
+    UT_Matrix4D getImageRBXForm(int idx) const { return myImages(idx).myRBXForm; }
 
     const UT_StringHolder &getScanName(int idx) const
     { return myScans(idx).myName; }
@@ -1403,7 +1713,7 @@ E57Reader::E57Reader(const char *filename)
     e57::StructureNode root_node = myFileHandle.root();
     e57::VectorNode scan_root_node(root_node.get("/data3D"));
 
-    auto set_rbxform = [](e57::StructureNode parent, UT_Matrix4D &rbxform)
+    auto set_rbxform = [](e57::StructureNode &parent, UT_Matrix4D &rbxform)
     {
 	if (parent.isDefined("pose"))
 	{
@@ -1447,6 +1757,55 @@ E57Reader::E57Reader(const char *filename)
 	{
 	    rbxform.identity();
 	}
+    };
+
+    auto set_boundingbox = [](e57::StructureNode &parent,
+                              UT_BoundingBoxD &bbox_out) {
+        // Note: the bounding box is in local coordinates. It should be
+        // transformed into the file-level coordinate system with myRBXForm.
+        fpreal x_min, y_min, z_min, x_max, y_max, z_max;
+        if (parent.isDefined("cartesianBounds"))
+        {
+            e57::StructureNode bbox(parent.get("cartesianBounds"));
+            x_min = getNodeValueF(bbox.get("xMinimum"));
+            x_max = getNodeValueF(bbox.get("xMaximum"));
+            y_min = getNodeValueF(bbox.get("yMinimum"));
+            y_max = getNodeValueF(bbox.get("yMaximum"));
+            z_min = getNodeValueF(bbox.get("zMinimum"));
+            z_max = getNodeValueF(bbox.get("zMaximum"));
+
+            bbox_out.setBounds(x_min, y_min, z_min, x_max, y_max, z_max);
+        }
+        else if (parent.isDefined("sphericalBounds"))
+        {
+            e57::StructureNode sbox(parent.get("sphericalBounds"));
+
+            fpreal range_min, range_max, elevation_min, elevation_max,
+                    azimuth_start, azimuth_end;
+
+            range_min = getNodeValueF(sbox.get("rangeMinimum"));
+            range_max = getNodeValueF(sbox.get("rangeMaximum"));
+            elevation_min = getNodeValueF(sbox.get("elevationMinimum"));
+            elevation_max = getNodeValueF(sbox.get("elevationMaximum"));
+            azimuth_start = getNodeValueF(sbox.get("azimuthStart"));
+            azimuth_end = getNodeValueF(sbox.get("azimuthEnd"));
+
+            // The standard says that azimuth end > start, but for safety:
+            fpreal azimuth_min = SYSmin(azimuth_start, azimuth_end);
+            fpreal azimuth_max = SYSmax(azimuth_start, azimuth_end);
+
+            fpreal cos_elevation_min = SYScos(elevation_min);
+            fpreal cos_elevation_max = SYScos(elevation_max);
+
+            x_min = range_min * cos_elevation_min * SYScos(azimuth_min);
+            x_max = range_max * cos_elevation_max * SYScos(azimuth_max);
+            y_min = range_min * cos_elevation_min * SYSsin(azimuth_min);
+            y_max = range_max * cos_elevation_max * SYSsin(azimuth_max);
+            z_min = range_min * SYSsin(elevation_min);
+            z_max = range_max * SYSsin(elevation_max);
+
+            bbox_out.setBounds(x_min, y_min, z_min, x_max, y_max, z_max);
+        }
     };
 
     int num_scans = scan_root_node.childCount();
@@ -1603,6 +1962,15 @@ E57Reader::E57Reader(const char *filename)
 	    scan.myName.clear();
 	}
 
+        // Get the scan bounding box in local coordinates, and move it to the
+	// file coordinate system.
+        UT_BoundingBoxD bbox;
+        set_boundingbox(scan_node, bbox);
+        if (!scan.myRBXForm.isIdentity())
+        {
+            bbox.transform(scan.myRBXForm);
+        }
+        scan.myMetadataBox = bbox;
 
 	myScans.append(scan);
     }
@@ -1767,42 +2135,6 @@ E57Reader::E57Reader(const char *filename)
 
 	myImages.append(image);
     }
-}
-
-int
-E57Reader::getNumScans() const
-{
-    return myScans.entries();
-}
-
-int
-E57Reader::getNumImages() const
-{
-    return myImages.entries();
-}
-
-exint
-E57Reader::getPointsInFile() const
-{
-    return myPointsInFile;
-}
-
-exint
-E57Reader::getPointsInScan(int idx) const
-{
-    return myScans(idx).myNumPoints;
-}
-
-UT_Matrix4D
-E57Reader::getScanRBXForm(int idx) const
-{
-    return myScans(idx).myRBXForm;
-}
-
-UT_Matrix4D
-E57Reader::getImageRBXForm(int idx) const
-{
-    return myImages(idx).myRBXForm;
 }
 
 sop_E57PointReader::Builder
@@ -2052,17 +2384,19 @@ private:
     const UT_Matrix4D myRBXFormInv;
     GA_ROHandleV3D myHandlePV3;
 };
+} // namespace
 
 //******************************************************************************
 //*			        Lidar Importer                                 *
 //******************************************************************************
-
+namespace 
+{
 // Takes in SOP parameters and adds/removes the minimum neccessary data.
 class LidarImporter
 {
 public:
     LidarImporter(const SOP_NodeVerb::CookParms &cookparms);
-    bool import();
+    bool importAndTransform();
      
 private:
     // Convenience functions to see if additional attributes should be read.
@@ -2087,6 +2421,7 @@ private:
     bool hasScanNamesChanged() const
     { return myParms.getScannames() != myCachedParms.getScannames(); }
 
+    bool hasTransformChanged() const;
     bool isClearDetailRequired() const;
     bool isReadRequired() const;
 
@@ -2099,14 +2434,14 @@ private:
             exint pts_in_scan) const;
     void computeRange(int &range_good, int &range_size, exint pts_in_file) const;
 
-    // Main file reading function.
+    // Main file reading function
     bool readData();
 
-    // LAS read helpers
-    void warnInapplicableParmsLAS();
+    // LAS read
+    void warnLASInapplicableParms();
     bool readLASFile(std::istream &stream);
 
-    // E57 read helpers
+    // E57 read
     bool readE57Scan(
             UT_StringArray &missing_attribs,
             E57Reader &reader,
@@ -2114,6 +2449,12 @@ private:
             int64 &pt_idx);
     bool readE57File();
     bool updateE57ColorFromImages(int image_index, E57Reader &reader);
+
+    template <typename Body>
+    void forAllPoints(const Body &body);
+
+    // Copy and transform detached positions and normals
+    void copyAndTransform(const UT_Matrix4D &xform, GA_TypeInfo type);
 
 private:
     const SOP_NodeVerb::CookParms &myCookparms;
@@ -2132,9 +2473,29 @@ LidarImporter::LidarImporter(const SOP_NodeVerb::CookParms &cookparms)
     , myGdp(myCookparms.gdh().gdpNC())
     , myCache(static_cast<SOP_LidarImportCache *>(myCookparms.cache()))
     , myParms(myCookparms.parms<SOP_LidarImportParms>())
-    , myCachedParms(myCache->getParms())
+    , myCachedParms(myCache->getCachedParms())
     , myBoss("Reading lidar file")
 {
+}
+
+bool
+LidarImporter::hasTransformChanged() const
+{
+    return myParms.getXord() != myCachedParms.getXord()
+           || myParms.getRord() != myCachedParms.getRord()
+           || myParms.getT() != myCachedParms.getT()
+           || myParms.getR() != myCachedParms.getR()
+           || myParms.getS() != myCachedParms.getS()
+           || myParms.getShear() != myCachedParms.getShear()
+           || myParms.getScale() != myCachedParms.getScale()
+           || myParms.getP() != myCachedParms.getP()
+           || myParms.getPr() != myCachedParms.getPr()
+           || myParms.getPrexform_xord() != myCachedParms.getPrexform_xord()
+           || myParms.getPrexform_rord() != myCachedParms.getPrexform_rord()
+           || myParms.getPrexform_t() != myCachedParms.getPrexform_t()
+           || myParms.getPrexform_r() != myCachedParms.getPrexform_r()
+           || myParms.getPrexform_s() != myCachedParms.getPrexform_s()
+           || myParms.getPrexform_shear() != myCachedParms.getPrexform_shear();
 }
 
 // Returns true if the detail needs to be destroyed and re-generated.
@@ -2302,7 +2663,7 @@ LidarImporter::computeRange(int &range_good, int &range_size, exint pts_in_file)
 //******************************************************************************
 
 void
-LidarImporter::warnInapplicableParmsLAS()
+LidarImporter::warnLASInapplicableParms()
 {
     using namespace SOP_LidarImportEnums;
     UT_StringArray inapplicable_parms;
@@ -2342,6 +2703,8 @@ LidarImporter::readLASFile(std::istream &stream)
     LASReader reader;
     if (!reader.openStream(stream))
         return false;
+
+    myCache->setFileBBox(reader.getBoundingBox());
 
     // Configure the number of points to be read from filter parms
     exint pts_in_file = reader.getPointCount();
@@ -2681,6 +3044,7 @@ LidarImporter::readE57Scan(
     else if (hasNormalsChanged() && !myParms.getNormals())
     {
         myGdp->destroyNormalAttribute(GA_ATTRIB_POINT);
+        myCache->destroyDetachedNormals();
     }
 
     if (reimport_required
@@ -2763,7 +3127,7 @@ LidarImporter::readE57Scan(
          if (hasNormalsChanged() && myParms.getNormals()
             && reader.hasNormals(scan_index))
         {
-            transformer.addAttribute(myGdp->findPointAttribute("N"));
+            transformer.addAttribute(myCache->getDetachedNormals());
         }
 
         GA_Range detached_pos_range(
@@ -2841,7 +3205,7 @@ LidarImporter::updateE57ColorFromImages(
     return true;
 }
 
-// Reads E57 file into the detail, by calling readE57Scan N-number of times.
+// Reads E57 file into the detail, by calling readE57Scan for N-scans.
 bool
 LidarImporter::readE57File()
 {
@@ -2852,15 +3216,18 @@ LidarImporter::readE57File()
     try
         {
             E57Reader reader(myParms.getFilename().c_str());
-
             int num_scans = reader.getNumScans();
-            int64 idx = 0;
-            UT_StringMap<UT_IntArray> missing_attrib_map;
-            UT_StringArray file_missing_attribs;
 
+            // Get the bounding box of all E57 scans
+            UT_BoundingBoxD bbox;
+            bbox.initBounds();
+            for (int i = 0; i < num_scans; i++)
+            {
+                bbox.enlargeBounds(reader.getBoundingBox(i));
+            }
+
+            // Get the total points to be read, and bind the detached position
             exint pts_in_file = reader.getPointsInFile();
-
-            // Configure the number of points to be read from filter parms
             if (isClearDetailRequired())
             {
                 exint num_pts = 0;
@@ -2888,6 +3255,18 @@ LidarImporter::readE57File()
                 UT_ASSERT(myGdp->getNumPoints() == num_pts);
             }
 
+            // Bind the detached normals if they are present
+            bool has_normals = false;
+            for (int i = 0; i < num_scans; ++i)
+            {
+                has_normals |= reader.hasNormals(i);
+            }
+            if (has_normals && myParms.getNormals())
+                myCache->bindDetachedNormals(*myGdp);
+
+            int64 pt_idx = 0;
+            UT_StringMap<UT_IntArray> missing_attrib_map;
+            UT_StringArray file_missing_attribs;
             for (int i = 0; i < num_scans; ++i)
             {
                 if (isClearDetailRequired())
@@ -2897,7 +3276,7 @@ LidarImporter::readE57File()
 		}
 
                 UT_StringArray scan_missing_attribs;
-                if (!readE57Scan(scan_missing_attribs, reader, i, idx))
+                if (!readE57Scan(scan_missing_attribs, reader, i, pt_idx))
                     return false;
 
                 if (scan_missing_attribs.entries() != 0)
@@ -3026,6 +3405,10 @@ LidarImporter::readE57File()
         return true;
 }
 
+//******************************************************************************
+//*                 Lidar Importer: Read and Transform Methods                 *
+//******************************************************************************
+
 // Read new data into the detail if there have been changes to parameters.
 bool
 LidarImporter::readData()
@@ -3059,7 +3442,7 @@ LidarImporter::readData()
     if (filename.matchFileExtension(".las")
         || filename.matchFileExtension(".laz"))
     {
-        warnInapplicableParmsLAS();
+        warnLASInapplicableParms();
         std::ifstream stream(filename, std::ios_base::binary);
         if (!stream.is_open())
         {
@@ -3086,8 +3469,100 @@ LidarImporter::readData()
     return true;
 }
 
+template <typename Body>
+void 
+LidarImporter::forAllPoints(const Body& body)
+{
+    UTparallelFor(
+            GA_SplittableRange(myGdp->getPointRange()),
+            [&](const GA_SplittableRange &r) {
+                GA_Offset start, end;
+                for (GA_Iterator it(r); it.blockAdvance(start, end);)
+                {
+                    for (GA_Offset pt = start; pt != end; ++pt)
+                        body(pt);
+                }
+            });
+}
+
+// Copies and transforms the detached positions or normals into the the detail.
+void
+LidarImporter::copyAndTransform(const UT_Matrix4D &xform, GA_TypeInfo type)
+{
+    GA_Attribute *src;
+    GA_Attribute *dest;
+
+    switch (type)
+    {
+    case GA_TYPE_POINT:
+    {
+        src = myCache->getDetachedPosition();
+        dest = myGdp->getP();
+        break;
+    }
+    case GA_TYPE_NORMAL:
+    {
+        src = myCache->getDetachedNormals();
+        dest = myGdp->findNormalAttribute(GA_ATTRIB_POINT);
+        break;
+    }
+    default:
+        return;
+    }
+ 
+    if (!src || !dest)
+        return;
+
+    GA_ROHandleV3D h_src(src);
+    GA_RWHandleV3D h_dest(dest);
+
+    if (h_src.isInvalid() || h_dest.isInvalid())
+        return;
+
+    // No transform needed:
+    if (xform.isIdentity()
+        || (type == GA_TYPE_NORMAL && UT_Matrix3D(xform).isIdentity()))
+    {
+        forAllPoints([&] (GA_Offset pt) {
+                    h_dest.set(pt, h_src.get(pt));
+        });
+    }
+    // Translate only:
+    else if (UT_Matrix3D(xform).isIdentity())
+    {
+        UT_Vector3D t;
+        xform.getTranslates(t);
+
+        forAllPoints([&] (GA_Offset pt) {
+                    h_dest.set(pt, h_src.get(pt) + t);
+        });
+    }
+    // Transform normals:
+    else if (type == GA_TYPE_NORMAL)
+    {
+        UT_Matrix4D ixform;
+        xform.invert(ixform);
+
+        if (UT_Matrix3D(xform).determinant() < 0)
+            ixform.scale(-1, -1, -1);
+
+        forAllPoints([&](GA_Offset pt) {
+                    UT_Vector3F n = h_src.get(pt);
+                    n.colVecMult3(ixform);
+                    h_dest.set(pt, n);
+        });
+    }
+    // Transform points:
+    else 
+    {
+        forAllPoints([&](GA_Offset pt) {
+                h_dest.set(pt, h_src.get(pt) * xform);
+        });
+    }
+}
+
 bool
-LidarImporter::import()
+LidarImporter::importAndTransform()
 {
     // Read any required lidar data into the detail.
     if (!readData())
@@ -3096,6 +3571,9 @@ LidarImporter::import()
         myCache->clearCache();
         return false;
     }
+
+    if (isClearDetailRequired())
+        myCache->updatePointBBox();
 
     // Set detail's position precision
     if (hasPrecisionChanged())
@@ -3111,22 +3589,318 @@ LidarImporter::import()
         tuple->setStorage(pos, pos_storage);
     }
 
-    // Copy data over
-    if (isClearDetailRequired()
-        || (hasPrecisionChanged() && myParms.getPrecision() == "64"))
+    // Build xform
+    const UT_Vector3D prexform_t = myParms.getPrexform_t();
+    const UT_Vector3D prexform_r = myParms.getPrexform_r();
+    const UT_Vector3D prexform_s = myParms.getPrexform_s();
+    const UT_Vector3D prexform_shear = myParms.getPrexform_shear();
+
+    UT_Matrix4D pre_xform;
+    SOP_Node::buildXform(
+            (int)myParms.getPrexform_xord(),
+            (int)myParms.getPrexform_rord(),
+            prexform_t.x(), prexform_t.y(), prexform_t.z(),
+            prexform_r.x(), prexform_r.y(), prexform_r.z(),
+            prexform_s.x(), prexform_s.y(), prexform_s.z(),
+            prexform_shear(0), prexform_shear(1), prexform_shear(2),
+            0.0, 0.0, 0.0,
+            pre_xform);
+
+    const UT_Vector3D t = myParms.getT();
+    const UT_Vector3D r = myParms.getR();
+    const UT_Vector3D s = myParms.getS();
+    const UT_Vector3D shear = myParms.getShear();
+    const fpreal64 scale = myParms.getScale();
+
+    UT_Matrix4D xform;
+    OP_Node::buildXform(
+            (int)myParms.getXord(),
+            (int)myParms.getRord(),
+            t.x(), t.y(), t.z(), 
+            r.x(), r.y(), r.z(),
+            s.x() * scale, s.y() * scale, s.z() * scale,
+            shear(0), shear(1), shear(2),
+            UT_Matrix4D::PivotSpace(myParms.getP(), myParms.getPr()),
+            xform);
+
+    xform *= pre_xform;
+
+    bool update = isClearDetailRequired() || hasTransformChanged();
+    if (update || (hasPrecisionChanged() && myParms.getPrecision() == "64"))
     {
-        GA_Range range(myCache->getDetachedPosition()->getIndexMap());
-        myGdp->getP()->copy(myGdp->getPointRange(), *myCache->getDetachedPosition(), range);
+        copyAndTransform(xform, GA_TYPE_POINT);
     }
 
-    myCache->updateCache(myParms);
+    if (update || (hasNormalsChanged() && myParms.getNormals()))
+    {
+        copyAndTransform(xform, GA_TYPE_NORMAL);
+    }
+
+    myCache->updateCachedParms(myParms);
     return true;
 }
 } // namespace
+
+//******************************************************************************
+//*                         SOP Cook and Callbacks                             *
+//******************************************************************************
 
 void
 SOP_LidarImportVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
 {
     LidarImporter importer(cookparms);
-    importer.import();
+    importer.importAndTransform();
+}
+
+// Moves the centroid and handle to the origin. This method follows that of
+// SOP_Transform, without the "invertxform" toggle.
+// If metadata_centroid is toggled on, the center of the file metadata bounding
+// box is used. Otherwise, the computed geometry centroid is used.
+bool
+SOP_LidarImport::moveCentroidToOrigin(fpreal now)
+{
+    using namespace SOP_LidarImportEnums;
+
+    UT_AutoUndoBlock u("Move Centroid To Origin", ANYLEVEL);
+    auto *cache = static_cast<SOP_LidarImportCache *>(myNodeVerbCache);
+
+    // Build the pre-xform matrix
+    UT_Matrix4D pre_xform;
+    OP_Node::buildXform(
+            PRETRANSFORM_TRS(), PRETRANSFORM_XYZ(), PRETRANSFORM_TX(now),
+            PRETRANSFORM_TY(now), PRETRANSFORM_TZ(now), PRETRANSFORM_RX(now),
+            PRETRANSFORM_RY(now), PRETRANSFORM_RZ(now), PRETRANSFORM_SX(now),
+            PRETRANSFORM_SY(now), PRETRANSFORM_SZ(now),
+            PRETRANSFORM_SHEAR_XY(now), PRETRANSFORM_SHEAR_XZ(now),
+            PRETRANSFORM_SHEAR_YZ(now),
+            0.0, 0.0, 0.0,
+            pre_xform);
+
+    UT_Matrix4D pre_xform_inv = pre_xform;
+    pre_xform_inv.invert();
+
+    // Build the xform matrix
+    UT_Matrix4D xform;
+    const fpreal scale = SCALE(now);
+    const UT_Vector3D pr(PIVOT_RX(now), PIVOT_RY(now), PIVOT_RZ(now));
+    UT_Vector3D p(PX(now), PY(now), PZ(now));
+
+    OP_Node::buildXform(
+            TRS(), XYZ(), TX(now), TY(now), TZ(now), RX(now), RY(now), RZ(now),
+            SX(now) * scale, SY(now) * scale, SZ(now) * scale, SHEAR_XY(now),
+            SHEAR_XZ(now), SHEAR_YZ(now), UT_Matrix4D::PivotSpace(p, pr),
+            xform);
+
+    xform *= pre_xform;
+
+    // Use the file metadata or point bounding box center as the centroid.
+    UT_Vector3D centroid;
+    if (evalInt("centroid", 0, 0) == (exint)Centroid::CALCULATED)
+    {
+        if (!cache->isPointBBoxUpdated())
+            cache->updatePointBBox();
+        
+        centroid = cache->getPointBBox().center();
+    }
+    else
+    {
+        centroid = cache->getFileBBox().center();
+    }
+
+    // Translate shift for moving the centroid to the origin.
+    UT_Vector3D delta = centroid;
+
+    // Current centroid's location. Translate xform by -1*centroid to center it.
+    centroid *= xform;
+    centroid *= -1.0;
+    xform.translate(centroid.x(), centroid.y(), centroid.z());
+
+    // Target is the point that the pre-transform moves to the origin. We want
+    // to include the target offset in our delta.
+    UT_Vector3D target_pivot(0.0, 0.0, 0.0);
+    target_pivot *= pre_xform_inv;
+    delta -= target_pivot;
+
+    // With a nontrivial pivot rotate set, we would need to apply our inverse
+    // pivot-rotate to -p to get the correct translate value. However, it would
+    // cancel out with itself in getPivotParmValue(). We get the same effect by
+    // specifying a translate of -p and no pivot-rotate.
+    p = OP_Node::getPivotParmValue(
+            TRS(), -delta.x(), -delta.y(), -delta.z(),
+            target_pivot.x(), target_pivot.y(), target_pivot.z());
+
+    // Snap pivot values close to default
+    for (int i = 0; i < 3; i++)
+    {
+        if (SYSequalZero(p(i)))
+            p(i) = 0.0;
+    }
+
+    // Undo the pre-transform. The centroid offset from earlier is still applied.
+    xform *= pre_xform_inv;
+
+    // Explode the shifted xform with our pivot value.
+    UT_XformOrder xord;
+    OP_Node::buildXformOrder(TRS(), XYZ(), xord);
+
+    UT_Vector3D r, s, t, shear;
+    xform.explode(xord, r, s, t, UT_Matrix4D::PivotSpace(p, pr), &shear);
+
+    r.radToDeg();
+    s /= SCALE(now);
+
+    // Set xform parameters
+    blockModify(true);
+    for (int i = 0; i < 3; i++)
+    {
+        // Snap values close to the default exactly to avoid them from
+        // showing up bolded in the parm pane.
+        if (SYSequalZero(t(i)))
+            t(i) = 0.0;
+        if (SYSequalZero(r(i)))
+            r(i) = 0.0;
+        if (SYSisEqual(s(i), 1.0))
+            s(i) = 1.0;
+        if (SYSequalZero(shear(i)))
+            shear(i) = 0.0;
+
+        setFloat("t", i, now, t(i));
+        setFloat("r", i, now, r(i));
+        setFloat("s", i, now, s(i));
+        setFloat("shear", i, now, shear(i));
+        setFloat("p", i, now, p(i));
+    }
+    setFloat("scale", 0, now, scale);
+    blockModify(false);
+
+    return true;
+}
+
+// Moves pivot to the centroid of the detail.
+// If metadata_centroid is toggled on, the center of the file metadata bounding
+// box is used. Otherwise, the computed geometry centroid is used.
+bool
+SOP_LidarImport::movePivotToCentroid(fpreal now)
+{
+    using namespace SOP_LidarImportEnums;
+
+    UT_AutoUndoBlock u("Move Pivot To Centroid", ANYLEVEL);
+    auto *cache = static_cast<SOP_LidarImportCache *>(myNodeVerbCache);
+
+    // Build the pre-xform matrix
+    UT_Matrix4D pre_xform;
+    OP_Node::buildXform(
+            PRETRANSFORM_TRS(), PRETRANSFORM_XYZ(), PRETRANSFORM_TX(now),
+            PRETRANSFORM_TY(now), PRETRANSFORM_TZ(now), PRETRANSFORM_RX(now),
+            PRETRANSFORM_RY(now), PRETRANSFORM_RZ(now), PRETRANSFORM_SX(now),
+            PRETRANSFORM_SY(now), PRETRANSFORM_SZ(now),
+            PRETRANSFORM_SHEAR_XY(now), PRETRANSFORM_SHEAR_XZ(now),
+            PRETRANSFORM_SHEAR_YZ(now),
+            0.0, 0.0, 0.0,
+            pre_xform);
+
+    // Build the xform matrix
+    UT_Matrix4D xform;
+    const fpreal scale = SCALE(now);
+    const UT_Vector3D pr(PIVOT_RX(now), PIVOT_RY(now), PIVOT_RZ(now));
+    UT_Vector3D p(PX(now), PY(now), PZ(now));
+
+    OP_Node::buildXform(
+	    TRS(), XYZ(),
+	    TX(now), TY(now), TZ(now),
+	    RX(now), RY(now), RZ(now),
+	    SX(now)*scale, SY(now)*scale, SZ(now)*scale,
+	    SHEAR_XY(now), SHEAR_XZ(now), SHEAR_YZ(now),
+	    UT_Matrix4D::PivotSpace(p, pr),
+	    xform);
+
+    // Set pivot to the centroid
+    UT_Vector3D centroid;
+    if (evalInt("centroid", 0, 0) == (exint)Centroid::CALCULATED)
+    {
+        if (cache->isPointBBoxUpdated())
+            cache->updatePointBBox();
+
+        centroid = cache->getPointBBox().center();
+    }
+    else
+    {
+        centroid = cache->getFileBBox().center();
+    }
+    p = centroid;
+
+    // Snap pivot values close to default
+    for (int i = 0; i < 3; i++)
+    {
+        if (SYSequalZero(p(i)))
+            p(i) = 0.0;
+    }
+
+    // Build the new xform with the updated pivot, p
+    UT_Matrix4D xform_new;
+    OP_Node::buildXform(
+	TRS(), XYZ(),
+	TX(now), TY(now), TZ(now),
+	RX(now), RY(now), RZ(now),
+	SX(now)*scale, SY(now)*scale, SZ(now)*scale,
+	SHEAR_XY(now), SHEAR_XZ(now), SHEAR_YZ(now),
+	UT_Matrix4D::PivotSpace(p, pr),
+	xform_new);
+
+    // Get new pre-transform matrix
+    UT_Matrix4D composition = xform * pre_xform;
+
+    // Compute new matrix
+    UT_Matrix4D xform_new_inv = xform_new;
+    xform_new_inv.invert();
+    UT_Matrix4D pre_xform_new = xform_new_inv * composition;
+
+    // Explode new pre-transform matrix
+    UT_XformOrder xord;
+    OP_Node::buildXformOrder(PRETRANSFORM_TRS(), PRETRANSFORM_XYZ(), xord);
+
+   UT_Vector3D r, s, t, shear;
+    pre_xform_new.explode(xord, r, s, t, &shear);
+
+    r.radToDeg();
+    s /= scale;
+
+    // Set xform parameters
+    blockModify(true);
+    for (int i = 0; i < 3; i++)
+    {
+        // Snap values close to the default exactly to avoid them from
+        // showing up bolded in the parm pane.
+        if (SYSequalZero(t(i)))
+            t(i) = 0.0;
+        if (SYSequalZero(r(i)))
+            r(i) = 0.0;
+        if (SYSisEqual(s(i), 1.0))
+            s(i) = 1.0;
+        if (SYSequalZero(shear(i)))
+            shear(i) = 0.0;
+
+        setFloat("p", i, now, p(i));
+        setFloat("prexform_t", i, now, t(i));
+        setFloat("prexform_r", i, now, r(i));
+        setFloat("prexform_s", i, now, s(i));
+        setFloat("prexform_shear", i, now, shear(i));
+    }
+    blockModify(false);
+
+    return true;
+}
+
+int
+SOP_LidarImport::moveCentroidToOriginCB(
+	void *data, int, fpreal t, const PRM_Template *)
+{
+    return static_cast<SOP_LidarImport *>(data)->moveCentroidToOrigin(t);
+}
+
+int
+SOP_LidarImport::movePivotToCentroidCB(
+	void *data, int, fpreal t, const PRM_Template *)
+{
+    return static_cast<SOP_LidarImport *>(data)->movePivotToCentroid(t);
 }
