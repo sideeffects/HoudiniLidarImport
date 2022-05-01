@@ -79,12 +79,6 @@ static const char *theDsFile = R"THEDSFILE(
 	parmtag { "filechooser_mode" "read" }
     }
     parm {
-	    name    "group_prefix"
-	    label   "Group Prefix"
-	    type    string
-	    default { "lidar_group" }
-    }
-    parm {
         name    "precision"
         label   "Precision"
         type    string
@@ -93,6 +87,17 @@ static const char *theDsFile = R"THEDSFILE(
             "32"        "32-bit"
             "64"        "64-bit"
         }
+    }
+    parm {
+	name	"loadtype"
+	label	"Load"
+	type	ordinal
+	default	{ "points" }
+	menu	{
+	    "points"	"Point Cloud"
+            "infobbox"  "Info Bounding Box"
+            "info"      "Info"
+	}
     }
         groupsimple {
 	name	    "transform"
@@ -292,6 +297,7 @@ static const char *theDsFile = R"THEDSFILE(
 	name	    "filtering"
 	label	    "Filtering"
 	grouptag    { "group_type" "simple" }
+    disablewhen "{ loadtype != points }"
 
     parm {
 	    name    "filter_type"
@@ -331,6 +337,7 @@ static const char *theDsFile = R"THEDSFILE(
 	name	    "attribs"
 	label	    "Attributes"
 	grouptag    { "group_type" "simple" }
+    disablewhen "{ loadtype != points }"
     
     parm {
 	    name    "color"
@@ -373,6 +380,37 @@ static const char *theDsFile = R"THEDSFILE(
 	    type    toggle
 	    default { "off" }
     }
+    parm {  
+            name    "scanindex"
+            label   "Scan Index"
+            type    toggle
+            default { "off" }
+    }
+    parm {
+	    name    "ptnames"
+	    label   "Scan Name"
+	    type    toggle
+	    default { "off" }
+    }
+    } // Attributes
+        groupcollapsible {
+	name	    "info"
+	label	    "Scan Info (deprecated)"
+	grouptag    { "group_type" "collapsible" }
+    disablewhen "{ loadtype != points }"
+    
+    parm {
+	    name    "group_prefix"
+	    label   "Group Prefix"
+	    type    string
+	    default { "lidar_group" }
+    }
+    parm {
+            name    "scangroups"
+            label   "Group Individual Scans"
+            type    toggle
+            default { "off" }
+    }
     parm {
 	    name    "rigidtransforms"
 	    label   "Rigid Transforms"
@@ -381,11 +419,11 @@ static const char *theDsFile = R"THEDSFILE(
     }
     parm {
 	    name    "scannames"
-	    label   "Scan Names"
+	    label   "Scan Name List"
 	    type    toggle
 	    default { "off" }
     }
-    } // Attributes
+    } // Scan Info
 }
 )THEDSFILE";
 
@@ -396,6 +434,20 @@ SOP_LidarImport::SOP_LidarImport(OP_Network *net, const char *name, OP_Operator 
 
 SOP_LidarImport::~SOP_LidarImport() {}
 
+// N-scangroups was a default behavior of the SOP. Now it is a deprecated
+// explicit toggle that is set to 'on' for older .hip files.
+//@TODO: Update the version string before commit.
+void
+SOP_LidarImport::syncNodeVersion(
+    const char *old_version, const char *cur_version, bool *node_deleted)
+{
+    if (UT_String::compareVersionString(old_version, "19.5.234") < 0)
+    {
+        setInt("scangroups", 0, 0.0, 1);
+    }
+    SOP_Node::syncNodeVersion(old_version, cur_version, node_deleted);
+}
+
 OP_ERROR
 SOP_LidarImport::cookMySop(OP_Context &context)
 {
@@ -405,9 +457,8 @@ SOP_LidarImport::cookMySop(OP_Context &context)
 class SOP_LidarImportCache : public SOP_NodeCache
 {
 public:
-    SOP_LidarImportCache() 
+    SOP_LidarImportCache()
         : SOP_NodeCache()
-        , myPositionBoxIsUpdated(false)
     {
         myFileMetadataBox.initBounds();
         myPositionBox.initBounds();
@@ -426,8 +477,10 @@ public:
     const UT_BoundingBoxD &getFileBBox() const { return myFileMetadataBox; }
     const UT_BoundingBoxD &getPointBBox() const { return myPositionBox; }
     void setFileBBox(const UT_BoundingBoxD &bbox) { myFileMetadataBox = bbox; }
+    void setPointBBox(const UT_BoundingBoxD &bbox) { myPositionBox = bbox; }
 
-    bool isPointBBoxUpdated() const { return myPositionBoxIsUpdated; }
+    void updatePointBBox();
+    bool isPointBBoxValid() const { return myPositionBox.isValid(); }
 
     // Binds the detached position attribute.
     // This should be called after the detail's point capacity has been set.
@@ -462,10 +515,7 @@ public:
         myNormals.reset();
         myFileMetadataBox.initBounds();
         myPositionBox.initBounds();
-        myPositionBoxIsUpdated = false;
     }
-
-    void updatePointBBox();
 
 private:
     class PointBoundsComputer;
@@ -482,7 +532,6 @@ private:
     // The bounding box of detached position attribute.
     // These bounds correspond to the original positions (i.e. untransformed).
     UT_BoundingBoxD myPositionBox;
-    bool myPositionBoxIsUpdated;
 };
 
 class SOP_LidarImportVerb : public SOP_NodeVerb
@@ -569,18 +618,12 @@ public:
 
     void operator()(const GA_SplittableRange &r)
     {
-        char bcnt = 0;
-        UT_Interrupt *boss = UTgetInterrupt();
-
         GA_ROPageHandleV3D handle(myAttrib);
 
         GA_Offset start;
         GA_Offset end;
         for (GA_Iterator it = r.begin(); it.blockAdvance(start, end);)
         {
-            if (!bcnt++ && boss->opInterrupt())
-                break;
-
             handle.setPage(start);
             GA_PageOff rstart = GAgetPageOff(start);
             GA_PageOff rend = GAgetPageOff(end - 1) + 1;
@@ -615,7 +658,6 @@ SOP_LidarImportCache::updatePointBBox()
     UTparallelReduce(
             GA_SplittableRange(myPosition->getDetail().getPointRange()), first);
     myPositionBox = first.getBox();
-    myPositionBoxIsUpdated = true;
 }
 
 //******************************************************************************
@@ -675,7 +717,7 @@ public:
     SYS_FORCE_INLINE UT_Vector3D getOffset() const { return myOffset; }
     SYS_FORCE_INLINE UT_BoundingBoxD getBoundingBox() const
     {
-        return myBoundingBox;
+        return myFileBoundingBox;
     }
 
     // myScale and myOffset must be applied to get the true xyz coords.
@@ -688,8 +730,6 @@ public:
     SYS_FORCE_INLINE void getNIR(fpreal32 &in) const;
 
     // These methods differ between legacy formats (0-5) and LAS 1.4 (6-10).
-    // my<Var> and my<Var>Mask members are set based on the point format
-    // to get the correct behavior.
     SYS_FORCE_INLINE void getReturnNumber(uint8 &in) const;
     SYS_FORCE_INLINE void getReturnCount(uint8 &in) const;
     SYS_FORCE_INLINE void getClassificationFlagSynthetic(bool &in) const;
@@ -713,7 +753,7 @@ private:
     uint8 myPointFormat;
     UT_Vector3D myScale;
     UT_Vector3D myOffset;
-    UT_BoundingBoxD myBoundingBox;
+    UT_BoundingBoxD myFileBoundingBox;
 
     // Available attributes that differ between point formats
     bool myHasGPSTime;
@@ -809,7 +849,7 @@ LASReader::openStream(std::istream &stream)
 
     myOffset.assign(myHeader->x_offset, myHeader->y_offset, myHeader->z_offset);
 
-    myBoundingBox.setBounds(
+    myFileBoundingBox.setBounds(
             myHeader->min_x, myHeader->min_y, myHeader->min_z, myHeader->max_x,
             myHeader->max_y, myHeader->max_z);
 
@@ -1644,7 +1684,8 @@ public:
     int getNumImages() const { return myImages.entries(); }
     exint getPointsInFile() const { return myPointsInFile; }
     exint getPointsInScan(int idx) const { return myScans(idx).myNumPoints; }
-    UT_BoundingBoxD getBoundingBox(int idx) const { return myScans(idx).myMetadataBox; }
+    const UT_BoundingBoxD &getScanBoundingBox(int idx) const { return myScans(idx).myMetadataBox; }
+    const UT_BoundingBoxD &getFileBoundingBox() const { return myFileBoundingBox; }
     UT_Matrix4D getScanRBXForm(int idx) const { return myScans(idx).myRBXForm; }
     UT_Matrix4D getImageRBXForm(int idx) const { return myImages(idx).myRBXForm; }
 
@@ -1704,6 +1745,7 @@ private:
     UT_Array<sop_ImageInfo> myImages;
 
     exint myPointsInFile;
+    UT_BoundingBoxD myFileBoundingBox;
 };
 
 E57Reader::E57Reader(const char *filename)
@@ -1973,6 +2015,13 @@ E57Reader::E57Reader(const char *filename)
         scan.myMetadataBox = bbox;
 
 	myScans.append(scan);
+    }
+
+    // Get the total bounds of the file
+    myFileBoundingBox.initBounds();
+    for (int i = 0; i < num_scans; i++)
+    {
+        myFileBoundingBox.enlargeBounds(myScans(i).myMetadataBox);
     }
 
     if (!root_node.isDefined("/images2D"))
@@ -2389,6 +2438,7 @@ private:
 //******************************************************************************
 //*			        Lidar Importer                                 *
 //******************************************************************************
+
 namespace 
 {
 // Takes in SOP parameters and adds/removes the minimum neccessary data.
@@ -2396,10 +2446,41 @@ class LidarImporter
 {
 public:
     LidarImporter(const SOP_NodeVerb::CookParms &cookparms);
-    bool importAndTransform();
+    bool import();
      
 private:
-    // Convenience functions to see if additional attributes should be read.
+    // Instructs the point cloud attribute reading, and  then copies and
+    // transforms P and N from the cache into the detail.
+    bool importAndTransformCloud();
+
+    // Instructs point cloud metadata reading, and then transforms the info.
+    bool importAndTransformInfo();
+
+    // Read helpers
+    bool readPoints();
+    bool readInfo();
+    void buildInfoCube(const UT_BoundingBoxD &bbox);
+
+    // LAS read
+    void warnLASInapplicableParms();
+    bool readLASFile(std::istream &stream);
+
+    // E57 read
+    bool readE57Scan(
+            UT_StringArray &missing_attribs,
+            E57Reader &reader,
+            int scan_index,
+            int64 &pt_idx);
+    bool readE57File();
+    bool updateE57ColorFromImages(int image_index, E57Reader &reader);
+
+    template <typename Body>
+    void forAllPoints(const Body &body);
+
+    // Copy and transform detached positions and normals
+    void copyAndTransform(const UT_Matrix4D &xform, GA_TypeInfo type);
+
+    // Convenience functions to see if read conditions have changed
     bool hasGroupPrefixChanged() const
     { return myParms.getGroup_prefix() != myCachedParms.getGroup_prefix(); }
     bool hasPrecisionChanged() const
@@ -2420,12 +2501,22 @@ private:
     { return myParms.getRigidtransforms() != myCachedParms.getRigidtransforms(); }
     bool hasScanNamesChanged() const
     { return myParms.getScannames() != myCachedParms.getScannames(); }
+    bool hasScanIndexChanged() const
+    { return myParms.getScanindex() != myCachedParms.getScanindex(); }
+    bool hasScanGroupsChanged() const
+    { return myParms.getScangroups() != myCachedParms.getScangroups(); }
+    bool hasPtNamesChanged() const
+    { return myParms.getPtnames() != myCachedParms.getPtnames(); }
 
     bool hasTransformChanged() const;
+
     bool isClearDetailRequired() const;
-    bool isReadRequired() const;
+    bool isReadPointsRequired() const;
+    bool isReadInfoRequired() const;
 
     // Utilities
+    UT_Matrix4D buildXform() const;
+
     static bool isRangeValid(exint range_good, exint range_size);
     void computeRange(
             int &range_good,
@@ -2433,28 +2524,6 @@ private:
             exint pts_in_file,
             exint pts_in_scan) const;
     void computeRange(int &range_good, int &range_size, exint pts_in_file) const;
-
-    // Main file reading function
-    bool readData();
-
-    // LAS read
-    void warnLASInapplicableParms();
-    bool readLASFile(std::istream &stream);
-
-    // E57 read
-    bool readE57Scan(
-            UT_StringArray &missing_attribs,
-            E57Reader &reader,
-            int scan_index,
-            int64 &pt_idx);
-    bool readE57File();
-    bool updateE57ColorFromImages(int image_index, E57Reader &reader);
-
-    template <typename Body>
-    void forAllPoints(const Body &body);
-
-    // Copy and transform detached positions and normals
-    void copyAndTransform(const UT_Matrix4D &xform, GA_TypeInfo type);
 
 private:
     const SOP_NodeVerb::CookParms &myCookparms;
@@ -2506,11 +2575,15 @@ LidarImporter::isClearDetailRequired() const
     if (myParms.getFilename() != myCachedParms.getFilename())
         return true;
 
+    // Loadtype changed:
+    if (myParms.getLoadtype() != myCachedParms.getLoadtype())
+        return true; 
+
     bool filter_changed = myParms.getFilter_type()
                             != myCachedParms.getFilter_type();
     switch (myParms.getFilter_type())
     {
-    // Range filter parms changed:
+    // Valid range filter parms changed:
     case SOP_LidarImportEnums::Filter_type::RANGE_FILTER:
     {
         if ((myParms.getSelect_range() != myCachedParms.getSelect_range()
@@ -2583,7 +2656,7 @@ LidarImporter::isClearDetailRequired() const
 
 // Returns true if the file needs to be accessed during the cook.
 bool
-LidarImporter::isReadRequired() const
+LidarImporter::isReadPointsRequired() const
 {
     // Filename and filter parms:
     if (isClearDetailRequired())
@@ -2598,12 +2671,77 @@ LidarImporter::isReadRequired() const
     UT_String filename;
     filename = myParms.getFilename();
     if (filename.matchFileExtension(".e57")
-        && (hasGroupPrefixChanged() || hasRowColChanged() || hasNormalsChanged()
-            || hasRigidTransformsChanged() || hasScanNamesChanged()))
+        && (hasRowColChanged() || hasNormalsChanged()
+            || hasRigidTransformsChanged() || hasScanNamesChanged()
+            || hasScanIndexChanged() || hasScanGroupsChanged()
+            || hasGroupPrefixChanged() || hasPtNamesChanged()))
+    {
+        return true;
+    }
+
+    return false;
+}
+
+bool
+LidarImporter::isReadInfoRequired() const
+{
+    // Filename changed:
+    if (myParms.getFilename() != myCachedParms.getFilename())
+        return true;
+
+    // Loadtype changed:
+    if (myParms.getLoadtype() != myCachedParms.getLoadtype())
+        return true; 
+
+    // Precision changed:
+    if (hasPrecisionChanged())
         return true;
 
     return false;
 }
+
+// Builds the composite transformation from all xform parameters.
+UT_Matrix4D
+LidarImporter::buildXform() const
+{
+        // Build xform
+    const UT_Vector3D prexform_t = myParms.getPrexform_t();
+    const UT_Vector3D prexform_r = myParms.getPrexform_r();
+    const UT_Vector3D prexform_s = myParms.getPrexform_s();
+    const UT_Vector3D prexform_shear = myParms.getPrexform_shear();
+
+    UT_Matrix4D pre_xform;
+    SOP_Node::buildXform(
+            (int)myParms.getPrexform_xord(),
+            (int)myParms.getPrexform_rord(),
+            prexform_t.x(), prexform_t.y(), prexform_t.z(),
+            prexform_r.x(), prexform_r.y(), prexform_r.z(),
+            prexform_s.x(), prexform_s.y(), prexform_s.z(),
+            prexform_shear(0), prexform_shear(1), prexform_shear(2),
+            0.0, 0.0, 0.0,
+            pre_xform);
+
+    const UT_Vector3D t = myParms.getT();
+    const UT_Vector3D r = myParms.getR();
+    const UT_Vector3D s = myParms.getS();
+    const UT_Vector3D shear = myParms.getShear();
+    const fpreal64 scale = myParms.getScale();
+
+    UT_Matrix4D xform;
+    OP_Node::buildXform(
+            (int)myParms.getXord(),
+            (int)myParms.getRord(),
+            t.x(), t.y(), t.z(), 
+            r.x(), r.y(), r.z(),
+            s.x() * scale, s.y() * scale, s.z() * scale,
+            shear(0), shear(1), shear(2),
+            UT_Matrix4D::PivotSpace(myParms.getP(), myParms.getPr()),
+            xform);
+
+    xform *= pre_xform;
+    return xform;
+}
+
 
 bool
 LidarImporter::isRangeValid(exint range_good, exint range_size)
@@ -2696,7 +2834,7 @@ bool
 LidarImporter::readLASFile(std::istream &stream)
 {
     using namespace SOP_LidarImportEnums;
-    if (!isReadRequired())
+    if (!isReadPointsRequired())
         return true;
 
     // Pass stream to reader and scrape its metadata.
@@ -2704,11 +2842,12 @@ LidarImporter::readLASFile(std::istream &stream)
     if (!reader.openStream(stream))
         return false;
 
-    myCache->setFileBBox(reader.getBoundingBox());
+    // Scrape metadata
+    UT_BoundingBoxD box = reader.getBoundingBox();
+    myCache->setFileBBox(box);
 
     // Configure the number of points to be read from filter parms
     exint pts_in_file = reader.getPointCount();
-
     int range_good, range_size;
     computeRange(range_good, range_size, pts_in_file);
 
@@ -2853,6 +2992,7 @@ LidarImporter::readLASFile(std::istream &stream)
         if (myBoss.wasInterrupted())
             return false;
     }
+
     return true;
 }
 
@@ -2879,6 +3019,7 @@ LidarImporter::readE57Scan(
             reader.createPointReaderBuilder(
                     scan_index, myGdp, myCache, range_good, range_size));
     
+    // Specify the buffer objects that will be needed
     bool read_file_required = false;
     bool reimport_required = isClearDetailRequired();
     if (reimport_required)
@@ -3051,7 +3192,7 @@ LidarImporter::readE57Scan(
 	|| hasGroupPrefixChanged()
         || hasRigidTransformsChanged())
     {
-        UT_WorkBuffer name(myParms.getGroup_prefix().c_str());
+        UT_WorkBuffer name(myCachedParms.getGroup_prefix().c_str());
         name.appendFormat("transform{}", scan_index + 1);
         myGdp->destroyAttribute(GA_ATTRIB_GLOBAL, name);
 
@@ -3069,27 +3210,7 @@ LidarImporter::readE57Scan(
         }
     }
 
-    GA_PointGroup *scan_group = nullptr;
-    if (reimport_required)
-    {
-        UT_WorkBuffer group_name(myParms.getGroup_prefix().c_str());
-        group_name.appendFormat("{}", scan_index + 1);
-        scan_group = myGdp->newPointGroup(group_name.buffer());
-    }
-    else if (hasGroupPrefixChanged())
-    {
-        UT_WorkBuffer old_group_name(myCachedParms.getGroup_prefix().c_str());
-        old_group_name.appendFormat("{}", scan_index + 1);
-        UT_WorkBuffer new_group_name(myParms.getGroup_prefix().c_str());
-        new_group_name.appendFormat("{}", scan_index + 1);
-
-        myGdp->getElementGroupTable(GA_ATTRIB_POINT)
-                .renameGroup(old_group_name.buffer(), new_group_name.buffer());
-    }
-
-    if (!read_file_required)
-        return true;
-
+    // Get number of points and range for this scan
     exint num_pts = pts_in_scan;
     if (isRangeValid(range_good, range_size))
     {
@@ -3099,15 +3220,83 @@ LidarImporter::readE57Scan(
         exint remaining_pts = pts_in_scan % range_size;
         num_pts += SYSmin(range_good, remaining_pts);
     }
+    GA_Range pt_range(
+        myGdp->getPointMap(), GA_Offset(pt_idx), GA_Offset(pt_idx + num_pts));
 
+    // Set the scan index attribute for the point range
+    if (hasScanIndexChanged())
+    {
+        if (myParms.getScanindex())
+        {
+            GA_Attribute *attrib = myGdp->addIntTuple(GA_ATTRIB_POINT, "scanindex", 1);
+            const GA_AIFTuple *tuple = attrib->getAIFTuple();
+
+            if (tuple)
+            {
+                tuple->set(attrib, pt_range, scan_index);
+            }
+        }
+        else
+        {
+            myGdp->destroyPointAttrib("scanindex");
+        }
+    }
+
+    // Set the scan nam attribute for the point range
+    if (hasPtNamesChanged())
+    {
+        if (myParms.getPtnames())
+        {
+            GA_Attribute *attrib = myGdp->addStringTuple(
+                    GA_ATTRIB_POINT, "scanname", 1);
+            auto *stuple = attrib->getAIFSharedStringTuple();
+
+            if (stuple)
+            {
+                stuple->setString(attrib, pt_range, reader.getScanName(scan_index), 0);
+            }
+        }
+        else
+        {
+            myGdp->destroyPointAttrib("scanname");
+        }
+    }
+
+    // Depreacted N-group representation of scans:
+    UT_WorkBuffer group_name(myParms.getGroup_prefix().c_str());
+    UT_WorkBuffer old_group_name(myCachedParms.getGroup_prefix().c_str());
+    group_name.appendFormat("{}", scan_index + 1);
+    old_group_name.appendFormat("{}", scan_index + 1);
+
+    if (hasScanGroupsChanged())
+    {
+        if (myParms.getScangroups())
+        {
+            GA_PointGroup *scan_group = myGdp->newPointGroup(group_name.buffer());
+            scan_group->setElement(pt_range, true);
+        }
+        else
+        {
+            myGdp->destroyPointGroup(old_group_name.buffer());
+        }
+    }
+    else if (hasGroupPrefixChanged())
+    {
+        myGdp->destroyPointGroup(old_group_name.buffer());
+        myGdp->newPointGroup(group_name.buffer());
+    }
+
+    if (!read_file_required)
+    {
+        pt_idx += num_pts;
+        return true;
+    }
+
+    // Construct the buffers for each attribute.
     sop_E57PointReader pt_reader(pt_reader_builder.build());
 
-    GA_Range pt_range(
-            myGdp->getPointMap(), GA_Offset(pt_idx), GA_Offset(pt_idx + num_pts));
-
-    if (reimport_required)
-        scan_group->setElement(pt_range, true);
-
+    // readBlock pushes data into the specified 1k buffers. Then, the data is
+    // copied to the respective pages, where the buffer's callback is invoked.
     GA_Offset start, end;
     for (GA_Iterator it(pt_range);
          it.blockAdvance(start, end) && pt_reader.readBlock(start, end);)
@@ -3210,7 +3399,7 @@ bool
 LidarImporter::readE57File()
 {
     using namespace SOP_LidarImportEnums;
-    if (!isReadRequired())
+    if (!isReadPointsRequired())
         return true;
 
     try
@@ -3218,13 +3407,8 @@ LidarImporter::readE57File()
             E57Reader reader(myParms.getFilename().c_str());
             int num_scans = reader.getNumScans();
 
-            // Get the bounding box of all E57 scans
-            UT_BoundingBoxD bbox;
-            bbox.initBounds();
-            for (int i = 0; i < num_scans; i++)
-            {
-                bbox.enlargeBounds(reader.getBoundingBox(i));
-            }
+            // Cache the bounding box of all E57 scans
+            myCache->setFileBBox(reader.getFileBoundingBox());
 
             // Get the total points to be read, and bind the detached position
             exint pts_in_file = reader.getPointsInFile();
@@ -3409,9 +3593,9 @@ LidarImporter::readE57File()
 //*                 Lidar Importer: Read and Transform Methods                 *
 //******************************************************************************
 
-// Read new data into the detail if there have been changes to parameters.
+// Read or destroy any point cloud attributes, if neeeded.
 bool
-LidarImporter::readData()
+LidarImporter::readPoints()
 {
     using namespace SOP_LidarImportEnums;
     UT_String filename;
@@ -3485,7 +3669,7 @@ LidarImporter::forAllPoints(const Body& body)
             });
 }
 
-// Copies and transforms the detached positions or normals into the the detail.
+// Copies and transforms the detached positions or normals into the detail.
 void
 LidarImporter::copyAndTransform(const UT_Matrix4D &xform, GA_TypeInfo type)
 {
@@ -3562,18 +3746,15 @@ LidarImporter::copyAndTransform(const UT_Matrix4D &xform, GA_TypeInfo type)
 }
 
 bool
-LidarImporter::importAndTransform()
+LidarImporter::importAndTransformCloud()
 {
     // Read any required lidar data into the detail.
-    if (!readData())
+    if (!readPoints())
     {
         myGdp->clearAndDestroy();
         myCache->clearCache();
         return false;
     }
-
-    if (isClearDetailRequired())
-        myCache->updatePointBBox();
 
     // Set detail's position precision
     if (hasPrecisionChanged())
@@ -3589,41 +3770,7 @@ LidarImporter::importAndTransform()
         tuple->setStorage(pos, pos_storage);
     }
 
-    // Build xform
-    const UT_Vector3D prexform_t = myParms.getPrexform_t();
-    const UT_Vector3D prexform_r = myParms.getPrexform_r();
-    const UT_Vector3D prexform_s = myParms.getPrexform_s();
-    const UT_Vector3D prexform_shear = myParms.getPrexform_shear();
-
-    UT_Matrix4D pre_xform;
-    SOP_Node::buildXform(
-            (int)myParms.getPrexform_xord(),
-            (int)myParms.getPrexform_rord(),
-            prexform_t.x(), prexform_t.y(), prexform_t.z(),
-            prexform_r.x(), prexform_r.y(), prexform_r.z(),
-            prexform_s.x(), prexform_s.y(), prexform_s.z(),
-            prexform_shear(0), prexform_shear(1), prexform_shear(2),
-            0.0, 0.0, 0.0,
-            pre_xform);
-
-    const UT_Vector3D t = myParms.getT();
-    const UT_Vector3D r = myParms.getR();
-    const UT_Vector3D s = myParms.getS();
-    const UT_Vector3D shear = myParms.getShear();
-    const fpreal64 scale = myParms.getScale();
-
-    UT_Matrix4D xform;
-    OP_Node::buildXform(
-            (int)myParms.getXord(),
-            (int)myParms.getRord(),
-            t.x(), t.y(), t.z(), 
-            r.x(), r.y(), r.z(),
-            s.x() * scale, s.y() * scale, s.z() * scale,
-            shear(0), shear(1), shear(2),
-            UT_Matrix4D::PivotSpace(myParms.getP(), myParms.getPr()),
-            xform);
-
-    xform *= pre_xform;
+    UT_Matrix4D xform = buildXform();
 
     bool update = isClearDetailRequired() || hasTransformChanged();
     if (update || (hasPrecisionChanged() && myParms.getPrecision() == "64"))
@@ -3639,6 +3786,303 @@ LidarImporter::importAndTransform()
     myCache->updateCachedParms(myParms);
     return true;
 }
+
+// Double precision version of guSolidCube() called in GU_Detail::cube()
+void
+LidarImporter::buildInfoCube(const UT_BoundingBoxD &bbox)
+{
+#define QUAD_VERTEX_OFFSET(prim_num, vtx_num) ((prim_num) * 4 + (vtx_num))
+
+    GA_Offset offset = myGdp->appendPointBlock(8);
+    GA_Offset start_vtxoff;
+    myGdp->appendPrimitivesAndVertices(GA_PRIMPOLY, 6, 4, start_vtxoff, true);
+   
+    // Left Bottom Front corner
+    myGdp->setPos3(offset, bbox.xmin(), bbox.ymin(), bbox.zmin());
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(3, 0), offset);
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(0, 3), offset);
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(4, 2), offset);
+
+    // Right Bottom Front corner
+    ++offset;
+    myGdp->setPos3(offset, bbox.xmax(), bbox.ymin(), bbox.zmin());
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(0, 0), offset);
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(1, 3), offset);
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(4, 1), offset);
+
+    // Right Bottom Back corner
+    ++offset;
+    myGdp->setPos3(offset, bbox.xmax(), bbox.ymin(), bbox.zmax());
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(1, 0), offset);
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(2, 3), offset);
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(4, 0), offset);
+
+    // Left Bottom Back corner
+    ++offset;
+    myGdp->setPos3(offset, bbox.xmin(), bbox.ymin(), bbox.zmax());
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(2, 0), offset);
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(3, 3), offset);
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(4, 3), offset);
+
+    // Left Top Front corner
+    ++offset;
+    myGdp->setPos3(offset, bbox.xmin(), bbox.ymax(), bbox.zmin());
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(3, 1), offset);
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(0, 2), offset);
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(5, 3), offset);
+
+    // Right Top Front corner
+    ++offset;
+    myGdp->setPos3(offset, bbox.xmax(), bbox.ymax(), bbox.zmin());
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(0, 1), offset);
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(1, 2), offset);
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(5, 0), offset);
+
+    // Right Top Back corner
+    ++offset;
+    myGdp->setPos3(offset, bbox.xmax(), bbox.ymax(), bbox.zmax());
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(1, 1), offset);
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(2, 2), offset);
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(5, 1), offset);
+
+    // Left Top Back corner
+    ++offset;
+    myGdp->setPos3(offset, bbox.xmin(), bbox.ymax(), bbox.zmax());
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(2, 1), offset);
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(3, 2), offset);
+    myGdp->setVertexPoint(start_vtxoff + QUAD_VERTEX_OFFSET(5, 2), offset);
+}
+
+// Read metadata into an info or bounding box info detail.
+bool
+LidarImporter::readInfo()
+{
+    using namespace SOP_LidarImportEnums;
+    UT_String filename;
+    filename = myParms.getFilename();
+
+    if (myCookparms.error()->getSeverity() >= UT_ERROR_ABORT
+        || !filename.isstring()
+        || !(filename.matchFileExtension(".las")
+             || filename.matchFileExtension(".laz")
+             || filename.matchFileExtension(".e57")))
+    {
+        myCache->clearCache();
+        return false;
+    }
+
+    if (!isReadInfoRequired())
+        return true;
+
+    myGdp->clearAndDestroy();
+    myCache->clearCache();
+
+    // Scrape metadata.
+    exint num_scans = 0;
+    exint total_points = 0;
+    UT_BoundingBoxD total_box;
+
+    UT_StringArray scannames;
+    UT_ExintArray pointcounts;
+    UT_Array<UT_BoundingBoxD> boxes;
+    UT_Array<UT_Matrix4D> xforms;
+
+    if (filename.matchFileExtension(".las")
+        || filename.matchFileExtension(".laz"))
+    {
+
+        std::ifstream stream(filename, std::ios_base::binary);
+        if (!stream.is_open())
+        {
+            myCookparms.sopAddError(
+                    SOP_ERR_LIDAR_READER_ERROR, "Failed to open the file.");
+            return false;
+        }
+
+        LASReader reader;
+        reader.openStream(stream);
+
+        // LAS is single-scan.
+        num_scans = 1;
+        total_points = reader.getPointCount();
+        total_box = reader.getBoundingBox();
+
+        scannames.append(filename.pathUpToExtension().fileName());
+        pointcounts.append(reader.getPointCount());
+        boxes.append(reader.getBoundingBox());
+
+        // LAS doesn't have a transform.
+        UT_Matrix4D mat;
+        mat.identity();
+        xforms.append(mat);
+    }
+    else if (filename.matchFileExtension(".e57"))
+    {
+        try
+        {
+            E57Reader reader(filename.c_str());
+            num_scans = reader.getNumScans();
+            total_points = reader.getPointsInFile();
+            total_box = reader.getFileBoundingBox();
+
+            for (int i = 0; i < num_scans; ++i)
+            {
+                scannames.append(reader.getScanName(i));
+                pointcounts.append(reader.getPointsInScan(i));
+                boxes.append(reader.getScanBoundingBox(i));
+                xforms.append(reader.getScanRBXForm(i));
+            }
+        }
+#ifdef E57_SOP_VERBOSE
+        catch (e57::E57Exception &e)
+        {
+            std::string context = e.context();
+            addError(SOP_ERR_LIDAR_READER_ERROR, context.c_str());
+            e.report(__FILE__, __LINE__, __FUNCTION__);
+            return false;
+        }
+#else
+        catch (e57::E57Exception &e)
+        {
+            std::string context = e.context();
+            myCookparms.sopAddError(
+                    SOP_ERR_LIDAR_READER_ERROR, context.c_str());
+            return false;
+        }
+#endif
+    }
+
+    // Set precision for position and bounds
+    GA_Storage pos_storage;
+    if (myParms.getPrecision() == "64")
+        pos_storage = GA_STORE_REAL64;
+    else
+        pos_storage = GA_STORE_REAL32;
+
+    GA_Attribute *pos = myGdp->getP();
+    const GA_AIFTuple *ptuple = pos->getAIFTuple();
+    ptuple->setStorage(pos, pos_storage);
+
+    // Common attribs between both info loadtypes:
+    GA_Attribute *bounds = myGdp->addFloatTuple(GA_ATTRIB_POINT, "bounds", 6);
+    const GA_AIFTuple *boundstuple = bounds->getAIFTuple();
+    boundstuple->setStorage(bounds, pos_storage);
+
+    GA_RWHandleD h_bounds(bounds);
+    GA_RWHandleI h_pointcount(
+            myGdp->addIntTuple(GA_ATTRIB_POINT, "pointcount", 1));
+    GA_RWHandleS h_filename(
+            myGdp->addStringTuple(GA_ATTRIB_POINT, "filename", 1));
+
+    // Load metadata into the detail:
+    switch (myParms.getLoadtype())
+    {
+    case Loadtype::INFOBBOX:
+    {
+        if (total_box.isValid())
+            buildInfoCube(total_box);
+        else
+            myGdp->appendPointOffset();
+
+        for (GA_Iterator it(myGdp->getPointRange()); !it.atEnd(); ++it)
+        {
+            if (h_filename.isValid())
+                h_filename.set(*it, filename.c_str());
+            if (h_pointcount.isValid())
+                h_pointcount.set(*it, total_points);
+            if (h_bounds.isValid())
+                h_bounds.setV(*it, total_box.data(), 6);
+        }
+        break;
+    }
+    case Loadtype::INFO:
+    {
+        GA_RWHandleS h_scanname;
+        GA_RWHandleI h_scanpointcount;
+        GA_RWHandleD h_transform;
+        
+        if (filename.matchFileExtension(".e57"))
+        {
+            h_scanname.bind(
+                    myGdp->addStringTuple(GA_ATTRIB_POINT, "scanname", 1));
+            h_scanpointcount.bind(
+                    myGdp->addIntTuple(GA_ATTRIB_POINT, "scanpointcount", 1));
+            h_transform.bind(
+                    myGdp->addFloatTuple(GA_ATTRIB_POINT, "transform", 16));
+        }
+
+         // Each point in the detail corresponds to a scan.
+        for (int i = 0; i < num_scans; ++i)
+        {
+            GA_Offset ptoff;
+            ptoff = myGdp->appendPointOffset();
+
+            if (boxes(i).isValid())
+                myGdp->setPos3(ptoff, boxes(i).center());
+            
+            if (h_filename.isValid())
+                h_filename.set(ptoff, filename.c_str());
+            if (h_pointcount.isValid())
+                h_pointcount.set(ptoff, total_points);
+            if (h_scanname.isValid())
+                h_scanname.set(ptoff, scannames(i).c_str());
+            if (h_scanpointcount.isValid())
+                h_scanpointcount.set(ptoff, pointcounts(i));
+            if (h_transform.isValid())
+                h_transform.setV(ptoff, xforms(i).data(), 16);
+            if (h_bounds.isValid())
+                h_bounds.setV(ptoff, boxes(i).data(), 6);
+        }
+        break;
+    }
+    default:
+        return false;
+    }
+
+    myCache->setFileBBox(total_box);
+    myCache->setPointBBox(total_box);
+
+    return true;
+}
+
+bool
+LidarImporter::importAndTransformInfo()
+{
+    // Read any required lidar data into the detail.
+    if (!readInfo())
+    {
+        myGdp->clearAndDestroy();
+        myCache->clearCache();
+        return false;
+    }
+
+    UT_Matrix4D xform = buildXform();
+    myGdp->transformPoints<fpreal64>(xform, myGdp->getPointRange());
+
+    return true;
+}
+
+bool
+LidarImporter::import()
+{
+    using namespace SOP_LidarImportEnums;
+
+    switch (myParms.getLoadtype())
+    {
+    case Loadtype::POINTS:
+    {
+        return importAndTransformCloud();
+    }
+    case Loadtype::INFOBBOX:
+    case Loadtype::INFO:
+    {
+        return importAndTransformInfo();
+    }
+    default:
+        return false;
+    }
+}
+
 } // namespace
 
 //******************************************************************************
@@ -3649,7 +4093,7 @@ void
 SOP_LidarImportVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
 {
     LidarImporter importer(cookparms);
-    importer.importAndTransform();
+    importer.import();
 }
 
 // Moves the centroid and handle to the origin. This method follows that of
@@ -3697,7 +4141,7 @@ SOP_LidarImport::moveCentroidToOrigin(fpreal now)
     UT_Vector3D centroid;
     if (evalInt("centroid", 0, 0) == (exint)Centroid::CALCULATED)
     {
-        if (!cache->isPointBBoxUpdated())
+        if (!cache->isPointBBoxValid())
             cache->updatePointBBox();
         
         centroid = cache->getPointBBox().center();
@@ -3818,7 +4262,7 @@ SOP_LidarImport::movePivotToCentroid(fpreal now)
     UT_Vector3D centroid;
     if (evalInt("centroid", 0, 0) == (exint)Centroid::CALCULATED)
     {
-        if (cache->isPointBBoxUpdated())
+        if (cache->isPointBBoxValid())
             cache->updatePointBBox();
 
         centroid = cache->getPointBBox().center();

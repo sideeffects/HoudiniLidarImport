@@ -60,6 +60,11 @@ protected:
     const SOP_NodeVerb      *cookVerb() const override;
     OP_ERROR                 cookMySop(OP_Context &context) override;
 
+    void		     syncNodeVersion(
+				    const char *old_version,
+				    const char *cur_version,
+				    bool *node_deleted) override;
+
 private:
     // Callback helpers
     bool	 moveCentroidToOrigin(fpreal now);

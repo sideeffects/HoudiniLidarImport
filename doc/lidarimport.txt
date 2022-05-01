@@ -38,13 +38,39 @@ File:
     #id: filename
     The name of the lidar file.
 
-Group Prefix:
-    #id: group_prefix
-    The prefix of the created groups, which represent separate scans stored in the file. Applies to E57 files only, as LAS and LAZ are single-scan formats.
-
 Precision:
     #id: precision
     The storage type for the positions. See [available types|#types] above.
+
+Load:
+    #id: loadtype
+    Lidar files contain metadata in the header that can be loaded without loading the entire file. This is useful for dealing with large data sets.
+    
+    Point Cloud:
+        Loads the point cloud from the file with the specified __Filtering__. Imports the requested __Attributes__ that are available.
+
+    Info Bounding Box:
+        Builds a single bounding box representing the total extent of the lidar scans. Attaches metadata attributes that can be summed across numerous scans. For scan-independent attributes, see __Info__.
+
+    Info:
+        Creates a point for each scan in the file. Attaches attributes corresponding to the scan metadata and global metadata.
+        
+        Metadata varies between the file formats. Metadata includes:
+
+        bounds:
+            The bounding box of the scan.
+        
+        pointcount:
+            The total number of points in the file.
+        
+        scanname:
+            The name of the scan. This data only exists in E57 files.
+
+        scanpointcount:
+            The number of points in the scan. This data only exists in E57 files.
+
+        transform:
+            The 4x4 matrix associated with the scan. This data only exists in E57 files.
 
 == Transform ==
 
@@ -92,7 +118,10 @@ Centroid:
         Use the file metadata bounding box center. Filtered import variations will have an identical centroid value.
 
     Using Calculated Centroid:
-        Compute the bounding box of the imported points, and use its center. This setting is recommended if the file has incorrect bounding box metadata.
+        Compute the bounding box of the imported points, and use its center.
+    
+    TIP:
+         __Using Calculated Centroid__ is recommended if the file has incorrect bounding box metadata, or if the file contains significant outlier points. Setting __Load__ as __Info Bounding Box__ can help to identify inaccurate bounding box metadata.
 
 Move Centroid to Origin:
     #id: movecentroid
@@ -176,6 +205,26 @@ Surface Normals:
     #id: normals
     Include the surface normals of the points. This data only exists in E57 files.
 
+Scan Index:
+    #id: scannindex
+    Include the scan index that a point belongs to. This data only exists in E57 files.
+
+Scan Name:
+    #id: scanname
+    Include the scan name that a point belongs to. This data only exists in E57 files.
+
+== Scan Info (deprecated) ==
+
+Several toggles are deprecated, all of which are specific to the E57 format. It is recommended to use the __Scan Index__ and __Scan Name__ toggles instead of __Group Individual Scans__. To access rigid transforms and the scan name list, it is recommended import the file with __Load__ as __Info__.
+
+Group Prefix:
+    #id: group_prefix
+    The prefix of the created groups and rigid transforms.
+    
+Group Individual Scans:
+    #id: scangroups
+    Group the points of each scan. Groups are named with the __Group Prefix__ parameter.
+
 Rigid Transforms:
     #id: rigidtransforms
     For E57 files, include the rigid transforms associated with each scan.
@@ -183,7 +232,7 @@ Rigid Transforms:
     "<prefix>transform2", etc. where __<prefix>__ is the value specified in the
     __Group Prefix__ parameter.
     
-Scan Names:
+Scan Name List:
     #id: scannames
     For E57 files, create the string array global attribute, __scannames__,
     that lists the names of the scans in the same order that the groups are
