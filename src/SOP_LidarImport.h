@@ -65,6 +65,9 @@ protected:
 				    const char *cur_version,
 				    bool *node_deleted) override;
 
+    void		     getDescriptiveParmName(UT_String &name) const override
+			     { name = "filename"; }
+
 private:
     // Callback helpers
     bool	 moveCentroidToOrigin(fpreal now);

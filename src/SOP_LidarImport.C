@@ -315,7 +315,7 @@ static const char *theDsFile = R"THEDSFILE(
 	    label   "Select _ of _"
 	    type    integer
 	    size    2
-	    default { "0" "0" }
+	    default { "1" "1" }
 	    range   { 0 10 }
     disablewhen "{ filter_type != range_filter }"
     }
@@ -1464,9 +1464,11 @@ sop_E57PointReader::Builder::returnCount()
 void
 sop_E57PointReader::Builder::timestamp()
 {
-    GA_Attribute *attrib = myGdp->addFloatTuple(GA_ATTRIB_POINT, "timestamp", 1);
+    GA_Attribute *attrib = myGdp->addFloatTuple(
+            GA_ATTRIB_POINT, "timestamp", 1, GA_Defaults(), nullptr, nullptr,
+            GA_STORE_REAL64);
 
-    myBufferInfos.append(new sop_E57BufferInfoT<fpreal32>("timeStamp", attrib, 
+    myBufferInfos.append(new sop_E57BufferInfoT<fpreal64>("timeStamp", attrib, 
 		myGdp));
 }
 
@@ -2508,6 +2510,8 @@ private:
     bool hasPtNamesChanged() const
     { return myParms.getPtnames() != myCachedParms.getPtnames(); }
 
+    bool isFilterParmsValid(const SOP_LidarImportParms &parms) const;
+    
     bool hasTransformChanged() const;
 
     bool isClearDetailRequired() const;
@@ -2548,6 +2552,31 @@ LidarImporter::LidarImporter(const SOP_NodeVerb::CookParms &cookparms)
 }
 
 bool
+LidarImporter::isFilterParmsValid(const SOP_LidarImportParms &parms) const
+{
+    using namespace SOP_LidarImportEnums;
+
+    switch (parms.getFilter_type())
+    {
+    case Filter_type::NO_FILTER:
+    {
+        return true;
+    }
+    case Filter_type::RANGE_FILTER:
+    {
+        return isRangeValid(
+                parms.getSelect_range()(0), parms.getSelect_range()(1));
+    }
+    case Filter_type::MAX_FILTER:
+    {
+        return parms.getMax_points() > 0;
+    }
+    default:
+        return false;
+    }
+}
+
+bool
 LidarImporter::hasTransformChanged() const
 {
     return myParms.getXord() != myCachedParms.getXord()
@@ -2571,6 +2600,8 @@ LidarImporter::hasTransformChanged() const
 bool
 LidarImporter::isClearDetailRequired() const
 {
+    using namespace SOP_LidarImportEnums;
+
     // Filename changed:
     if (myParms.getFilename() != myCachedParms.getFilename())
         return true;
@@ -2579,64 +2610,44 @@ LidarImporter::isClearDetailRequired() const
     if (myParms.getLoadtype() != myCachedParms.getLoadtype())
         return true; 
 
-    bool filter_changed = myParms.getFilter_type()
-                            != myCachedParms.getFilter_type();
-    switch (myParms.getFilter_type())
-    {
-    // Valid range filter parms changed:
-    case SOP_LidarImportEnums::Filter_type::RANGE_FILTER:
-    {
-        if ((myParms.getSelect_range() != myCachedParms.getSelect_range()
-             || filter_changed)
-            && (isRangeValid(
-                        myParms.getSelect_range()(0),
-                        myParms.getSelect_range()(1))
-                || isRangeValid(
-                        myCachedParms.getSelect_range()(0),
-                        myCachedParms.getSelect_range()(1))))
-        {
-            return true;
-        }
-        break;
-    }
-    // Valid max filter parms changed:
-    case SOP_LidarImportEnums::Filter_type::MAX_FILTER:
-    {
-        if ((myParms.getMax_points() != myCachedParms.getMax_points()
-             || filter_changed)
-            && (myParms.getMax_points() > 0
-                || myCachedParms.getMax_points() > 0))
-        {
-            return true;
-        }
-        break;
-    }
-    // Special case: filter turned off, but the previous filter parms were
-    // valid.
-    case SOP_LidarImportEnums::Filter_type::NO_FILTER:
-    {
-        if (filter_changed
-            && myCachedParms.getFilter_type()
-                        == SOP_LidarImportEnums::Filter_type::RANGE_FILTER
-            && isRangeValid(
-                    myCachedParms.getSelect_range()(0),
-                    myCachedParms.getSelect_range()(1)))
-        {
-            return true;
-        }
+    // Filter changed:
+    bool filter_valid = isFilterParmsValid(myParms);
+    bool prev_filter_valid = isFilterParmsValid(myCachedParms);
 
-        else if (
-                filter_changed
-                && myCachedParms.getFilter_type()
-                            == SOP_LidarImportEnums::Filter_type::MAX_FILTER
-                && myCachedParms.getMax_points() > 0)
-        {
-            return true;
-        }
-        break;
+    if (!prev_filter_valid && filter_valid
+        && !(myParms.getFilter_type() == Filter_type::NO_FILTER))
+    {
+        return true;
     }
-    default:
-        break;
+    if (prev_filter_valid && !filter_valid
+        && !(myCachedParms.getFilter_type() == Filter_type::NO_FILTER))
+    {
+        return true;
+    }
+    if (prev_filter_valid && filter_valid)
+    {
+        if (myParms.getFilter_type() != myCachedParms.getFilter_type())
+            return true;
+        
+        switch (myParms.getFilter_type())
+        {
+        case Filter_type::NO_FILTER:
+            break;
+        case Filter_type::RANGE_FILTER:
+        {
+            if (myParms.getSelect_range() != myCachedParms.getSelect_range())
+                return true;
+            break;
+        }
+        case Filter_type::MAX_FILTER:
+        {
+            if (myParms.getMax_points() != myCachedParms.getMax_points())
+                return true;
+            break;
+        }
+        default:
+            break;
+        }
     }
 
     // E57 invalid group handling changed:
@@ -2921,8 +2932,11 @@ LidarImporter::readLASFile(std::istream &stream)
         if (myParms.getTimestamp())
         {
             if (reader.hasGPSTime())
-                timestampPH.bind(
-                        myGdp->addFloatTuple(GA_ATTRIB_POINT, "timestamp", 1));
+            {
+                timestampPH.bind(myGdp->addFloatTuple(
+                        GA_ATTRIB_POINT, "timestamp", 1, GA_Defaults(), nullptr,
+                        nullptr, GA_STORE_REAL64));
+            }
             else
                 myCookparms.sopAddWarning(
                         SOP_WARN_ATTRIBS_NOT_FOUND, "Timestamp");
