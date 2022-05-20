@@ -3011,10 +3011,10 @@ LidarImporter::readLASFile()
                 exint end_page = ((idx + 1) * num_pages) / ptreaders.size()
                                  + first_pagenum;
 
-                GA_Offset start = SYSmax(
-                        start_page * GA_PAGE_SIZE, (exint)start_offset);
-                GA_Offset end = SYSmin(
-                        end_page * GA_PAGE_SIZE, (exint)start_offset + num_pts);
+                GA_Offset start = GA_Offset(SYSmax(
+                        start_page * GA_PAGE_SIZE, (exint)start_offset));
+                GA_Offset end = GA_Offset(SYSmin(
+                        end_page * GA_PAGE_SIZE, (exint)start_offset + num_pts));
                 GA_Range pointrange(myGdp->getPointMap(), start, end);
 
                 LASReader *pread = ptreaders(idx);
