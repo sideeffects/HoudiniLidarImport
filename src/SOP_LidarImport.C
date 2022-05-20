@@ -669,10 +669,10 @@ namespace
 class LASReader
 {
 public:
+    LASReader(const char *filename);
     ~LASReader();
 
-    // Open file and read metadata. Returns true if successful.
-    bool openStream(std::istream &stream);
+    bool isValid() const { return myReader; }
     exint getPointCount() const { return myPointCount; }
 
     // Read next point data from the stream
@@ -756,25 +756,96 @@ private:
     UT_BoundingBoxD myFileBoundingBox;
 
     // Available attributes that differ between point formats
-    bool myHasGPSTime;
-    bool myHasRGB;
-    bool myHasNIR;
-    bool myHasClassificationFlagOverlap; // LAS 1.4 only.
-    bool myHasScannerChannel;            // LAS 1.4 only.
+    bool myHasGPSTime = false;
+    bool myHasRGB = false;
+    bool myHasNIR = false;
+    bool myHasClassificationFlagOverlap = false;
+    bool myHasScannerChannel = false; // LAS 1.4 only.
 
+    void closeReader();
+    void destroyReader();
     void initializeAvailableAttribs();
 };
 
+LASReader::LASReader(const char *filename)
+{
+    if (laszip_create(&myReader))
+    {
+        UTdebugPrint("LASzip failed: laszip_create");
+        myReader = nullptr;
+        return;
+    }
+
+    if (laszip_open_reader(myReader, filename, &myIsCompressed))
+    {
+        UTdebugPrint("LASzip failed: laszip_open_reader_stream");
+        destroyReader();
+        return;
+    }
+
+    if (laszip_get_header_pointer(myReader, &myHeader))
+    {
+        UTdebugPrint("LASzip failed: laszip_get_header_pointer");
+        closeReader();
+        destroyReader();
+        return;
+    }
+
+    if (laszip_get_point_pointer(myReader, &myPoint))
+    {
+        UTdebugPrint("LASzip failed: laszip_get_point_pointer");
+        closeReader();
+        destroyReader();
+        return;
+    }
+   
+    laszip_I64 npoints
+            = (myHeader->number_of_point_records ?
+                       myHeader->number_of_point_records :
+                       myHeader->extended_number_of_point_records);
+    myPointCount = static_cast<exint>(npoints);
+    myPointFormat = static_cast<uint8>(myHeader->point_data_format);
+
+    myScale.assign(
+            myHeader->x_scale_factor, myHeader->y_scale_factor,
+            myHeader->z_scale_factor);
+
+    myOffset.assign(myHeader->x_offset, myHeader->y_offset, myHeader->z_offset);
+
+    myFileBoundingBox.setBounds(
+            myHeader->min_x, myHeader->min_y, myHeader->min_z, myHeader->max_x,
+            myHeader->max_y, myHeader->max_z);
+
+    // Ensure that the header was read correctly
+    myPointFormat = myHeader->point_data_format;
+    if (myPointFormat > 10)
+    {
+        closeReader();
+        destroyReader();
+    }
+
+    initializeAvailableAttribs();
+}
+
 LASReader::~LASReader()
 {
-    if (myReader)
-    {
-        if (laszip_close_reader(myReader))
-            UTdebugPrint("LASzip failed: laszip_close_reader");
+    closeReader();
+    destroyReader();
+}
 
-        if (laszip_destroy(myReader))
-            UTdebugPrint("LASzip failed: laszip_destroy");
-    }
+void
+LASReader::closeReader()
+{
+    if (myReader && laszip_close_reader(myReader))
+        UTdebugPrint("LASzip failed: laszip_close_reader");
+}
+
+void
+LASReader::destroyReader()
+{
+    if (myReader && laszip_destroy(myReader))
+        UTdebugPrint("LASzip failed: laszip_destroy");
+    myReader = nullptr;
 }
 
 void
@@ -801,67 +872,6 @@ LASReader::initializeAvailableAttribs()
     {
         myHasNIR = true;
     }
-}
-
-bool
-LASReader::openStream(std::istream &stream)
-{
-    if (laszip_create(&myReader))
-    {
-        UTdebugPrint("LASzip failed: laszip_create");
-        myReader = nullptr;
-        return false;
-    }
-
-    if (laszip_open_reader_stream(myReader, stream, &myIsCompressed))
-    {
-        UTdebugPrint("LASzip failed: laszip_open_reader_stream");
-
-        if (laszip_destroy(myReader))
-            UTdebugPrint("LASzip failed: laszip_destroy");
-
-        myReader = nullptr;
-        return false;
-    }
-
-    if (laszip_get_header_pointer(myReader, &myHeader))
-    {
-        UTdebugPrint("LASzip failed: laszip_get_header_pointer");
-        return false;
-    }
-
-    if (laszip_get_point_pointer(myReader, &myPoint))
-    {
-        UTdebugPrint("LASzip failed: laszip_get_point_pointer");
-        return false;
-    }
-
-    laszip_I64 npoints
-            = (myHeader->number_of_point_records ?
-                       myHeader->number_of_point_records :
-                       myHeader->extended_number_of_point_records);
-    myPointCount = static_cast<exint>(npoints);
-    myPointFormat = static_cast<uint8>(myHeader->point_data_format);
-
-    myScale.assign(
-            myHeader->x_scale_factor, myHeader->y_scale_factor,
-            myHeader->z_scale_factor);
-
-    myOffset.assign(myHeader->x_offset, myHeader->y_offset, myHeader->z_offset);
-
-    myFileBoundingBox.setBounds(
-            myHeader->min_x, myHeader->min_y, myHeader->min_z, myHeader->max_x,
-            myHeader->max_y, myHeader->max_z);
-
-    // Ensure that the header was read correctly
-    myPointFormat = myHeader->point_data_format;
-    if (myPointFormat > 10)
-    {
-        return false;
-    }
-
-    initializeAvailableAttribs();
-    return true;
 }
 
 void
@@ -2465,7 +2475,7 @@ private:
 
     // LAS read
     void warnLASInapplicableParms();
-    bool readLASFile(std::istream &stream);
+    bool readLASFile();
 
     // E57 read
     bool readE57Scan(
@@ -2842,23 +2852,25 @@ LidarImporter::warnLASInapplicableParms()
 
 // Read a .las or .laz file for a SOP cook. Returns true if successful.
 bool
-LidarImporter::readLASFile(std::istream &stream)
+LidarImporter::readLASFile()
 {
     using namespace SOP_LidarImportEnums;
     if (!isReadPointsRequired())
         return true;
 
-    // Pass stream to reader and scrape its metadata.
-    LASReader reader;
-    if (!reader.openStream(stream))
+    LASReader *reader = new LASReader(myParms.getFilename().c_str());
+    if (!reader->isValid())
+    {
+        delete reader;
         return false;
+    }
 
     // Scrape metadata
-    UT_BoundingBoxD box = reader.getBoundingBox();
+    UT_BoundingBoxD box = reader->getBoundingBox();
     myCache->setFileBBox(box);
 
     // Configure the number of points to be read from filter parms
-    exint pts_in_file = reader.getPointCount();
+    exint pts_in_file = reader->getPointCount();
     int range_good, range_size;
     computeRange(range_good, range_size, pts_in_file);
 
@@ -2873,22 +2885,25 @@ LidarImporter::readLASFile(std::istream &stream)
     }
 
     // Reserve geometry if position needs to be read.
-    GA_RWPageHandleV3D positionPH;
+    bool read_required = false;
     if (isClearDetailRequired())
     {
         myGdp->appendPointBlock(num_pts);
         myCache->bindDetachedPosition(*myGdp);
-        positionPH.bind(myCache->getDetachedPosition());
         UT_ASSERT(myGdp->getNumPoints() == num_pts);
+        read_required = true;
     }
 
-    GA_RWPageHandleV3 colorPH;
+    // Add / remove requested attributes
     if (hasColorChanged())
     {
         if (myParms.getColor() == Color::FROM_PTCLOUD)
         {
-            if (reader.hasRGB())
-                colorPH.bind(myGdp->addDiffuseAttribute(GA_ATTRIB_POINT));
+            if (reader->hasRGB())
+            {
+                myGdp->addDiffuseAttribute(GA_ATTRIB_POINT);
+                read_required = true;
+            }
             else
                 myCookparms.sopAddWarning(SOP_WARN_ATTRIBS_NOT_FOUND, "Color");
         }
@@ -2897,27 +2912,23 @@ LidarImporter::readLASFile(std::istream &stream)
             myGdp->destroyDiffuseAttribute(GA_ATTRIB_POINT);
         }
     }
-
-    GA_RWPageHandleF intensityPH;
     if (hasIntensityChanged())
     {
         if (myParms.getIntensity())
-            intensityPH.bind(
-                    myGdp->addFloatTuple(GA_ATTRIB_POINT, "intensity", 1));
+        {
+            myGdp->addFloatTuple(GA_ATTRIB_POINT, "intensity", 1);
+            read_required = true;
+        }
         else
             myGdp->destroyPointAttrib("intensity");
     }
-
-    GA_PageHandleScalar<uint8>::RWType returnIndexPH;
-    GA_PageHandleScalar<uint8>::RWType returnCountPH;
     if (hasRetDataChanged())
     {
         if (myParms.getRet_data())
         {
-            returnIndexPH.bind(
-                    myGdp->addIntTuple(GA_ATTRIB_POINT, "return_index", 1));
-            returnCountPH.bind(
-                    myGdp->addIntTuple(GA_ATTRIB_POINT, "return_count", 1));
+            myGdp->addIntTuple(GA_ATTRIB_POINT, "return_index", 1);
+            myGdp->addIntTuple(GA_ATTRIB_POINT, "return_count", 1);
+            read_required = true;
         }
         else
         {
@@ -2925,17 +2936,15 @@ LidarImporter::readLASFile(std::istream &stream)
             myGdp->destroyPointAttrib("return_count");
         }
     }
-
-    GA_RWPageHandleD timestampPH;
     if (hasTimestampChanged())
     {
         if (myParms.getTimestamp())
         {
-            if (reader.hasGPSTime())
+            if (reader->hasGPSTime())
             {
-                timestampPH.bind(myGdp->addFloatTuple(
-                        GA_ATTRIB_POINT, "timestamp", 1, GA_Defaults(), nullptr,
-                        nullptr, GA_STORE_REAL64));
+                myGdp->addFloatTuple(
+                        GA_ATTRIB_POINT, "timestamp", 1, GA_Defaults(), nullptr, nullptr, GA_STORE_REAL64);
+                read_required = true;
             }
             else
                 myCookparms.sopAddWarning(
@@ -2948,64 +2957,132 @@ LidarImporter::readLASFile(std::istream &stream)
     }
 
     // Stop if no new attributes need to be read.
-    if (!(positionPH.isValid() || colorPH.isValid() || intensityPH.isValid()
-          || returnIndexPH.isValid() || timestampPH.isValid()))
-        return true;
-
-    // Main loops for reading data into the page handles:
-    exint p_index = 0;
-    exint range = 0;
-    exint seek_size = static_cast<exint>(range_size - range_good);
-    GA_Offset start, end;
-    for (GA_Iterator it(myGdp->getPointRange()); it.blockAdvance(start, end);)
+    if (!read_required || !num_pts)
     {
-        if (positionPH.isValid())
-            positionPH.setPage(start);
-        if (colorPH.isValid())
-            colorPH.setPage(start);
-        if (intensityPH.isValid())
-            intensityPH.setPage(start);
-        if (returnIndexPH.isValid() && returnCountPH.isValid())
-        {
-            returnIndexPH.setPage(start);
-            returnCountPH.setPage(start);
-        }
-        if (timestampPH.isValid())
-            timestampPH.setPage(start);
-
-        for (GA_Offset ptoff = start; ptoff < end; ++ptoff, ++range, ++p_index)
-        {
-            // Skip over points outside of the filter range.
-            if (seek_size && range == range_good)
-            {
-                range = 0;
-                p_index += seek_size;
-                reader.seekPoint(p_index);
-            }
-
-            // Read point and fill page elements.
-            reader.readNextPoint();
-
-            if (positionPH.isValid())
-                reader.getXYZ(positionPH.value(ptoff));
-            if (colorPH.isValid())
-                reader.getRGB(colorPH.value(ptoff));
-            if (intensityPH.isValid())
-                reader.getIntensity(intensityPH.value(ptoff));
-            if (returnIndexPH.isValid() && returnCountPH.isValid())
-            {
-                reader.getReturnNumber(returnIndexPH.value(ptoff));
-                reader.getReturnCount(returnCountPH.value(ptoff));
-            }
-            if (timestampPH.isValid())
-            {
-                reader.getGPSTime(timestampPH.value(ptoff));
-            }
-        }
-
-        if (myBoss.wasInterrupted())
-            return false;
+        delete reader;
+        return true;
     }
+
+    // Generate point readers
+    GA_Offset start_offset = myGdp->pointOffset(0);
+    exint first_pagenum = GAgetPageNum(start_offset);
+    exint num_pages = GAgetPageNum(start_offset + num_pts - 1) + 1
+                      - first_pagenum;
+    int num_readers = SYSmin(num_pages, UT_Thread::getNumProcessors());
+
+    UT_Array<LASReader *> ptreaders(num_readers);
+    ptreaders.append(reader);
+    for (int i = 1; i < num_readers; ++i)
+    {
+        ptreaders.append(new LASReader(myParms.getFilename().c_str()));
+
+        if (!ptreaders.last()->isValid())
+        {
+            delete ptreaders.last();
+            ptreaders.removeLast();
+            break;
+        }
+    }
+
+    GA_Attribute *position(myCache->getDetachedPosition());
+    GA_Attribute *color(myGdp->findDiffuseAttribute(GA_ATTRIB_POINT));
+    GA_Attribute *intensity(myGdp->findPointAttribute("intensity"));
+    GA_Attribute *returnIndex(myGdp->findPointAttribute("return_index"));
+    GA_Attribute *returnCount(myGdp->findPointAttribute("return_count"));
+    GA_Attribute *timestamp(myGdp->findPointAttribute("timestamp"));
+
+    // Read the requested attributes
+    exint seek_size = static_cast<exint>(range_size - range_good);
+    UTparallelForEachNumber(
+            ptreaders.size(),
+            [&](const UT_BlockedRange<exint> &r)
+            {
+                exint idx = r.begin();
+
+                GA_RWPageHandleV3D positionPH(position);
+                GA_RWPageHandleV3 colorPH(color);
+                GA_RWPageHandleF intensityPH(intensity);
+                GA_PageHandleScalar<uint8>::RWType returnIndexPH(returnIndex);
+                GA_PageHandleScalar<uint8>::RWType returnCountPH(returnCount);
+                GA_RWPageHandleD timestampPH(timestamp);
+
+                exint start_page = (idx * num_pages) / ptreaders.size()
+                                   + first_pagenum;
+                exint end_page = ((idx + 1) * num_pages) / ptreaders.size()
+                                 + first_pagenum;
+
+                GA_Offset start = SYSmax(
+                        start_page * GA_PAGE_SIZE, start_offset);
+                GA_Offset end = SYSmin(
+                        end_page * GA_PAGE_SIZE, start_offset + num_pts);
+                GA_Range pointrange(myGdp->getPointMap(), start, end);
+
+                LASReader *pread = ptreaders(idx);
+                for (GA_Iterator it(pointrange); it.blockAdvance(start, end);)
+                {
+                    if (myBoss.wasInterrupted())
+                        break;
+
+                    if (positionPH.isValid())
+                        positionPH.setPage(start);
+                    if (colorPH.isValid())
+                        colorPH.setPage(start);
+                    if (intensityPH.isValid())
+                        intensityPH.setPage(start);
+                    if (returnIndexPH.isValid() && returnCountPH.isValid())
+                    {
+                        returnIndexPH.setPage(start);
+                        returnCountPH.setPage(start);
+                    }
+                    if (timestampPH.isValid())
+                        timestampPH.setPage(start);
+
+                    // Determine the point number that we should be reading
+                    int range = 0;
+                    exint file_idx = myGdp->pointIndex(start);
+                    if (seek_size > 0)
+                    {
+                        exint num_ranges = file_idx / range_good;
+                        range = file_idx % range_good;
+
+                        file_idx = num_ranges * range_size + range;
+                    }
+                    pread->seekPoint(file_idx);
+
+                    for (GA_Offset ptoff = start; ptoff != end;
+                         ++ptoff, ++range, ++file_idx)
+                    {
+                        if (seek_size && (range == range_good))
+                        {
+                            range = 0;
+                            file_idx += seek_size;
+                            pread->seekPoint(file_idx);
+                        }
+
+                        pread->readNextPoint();
+
+                        if (positionPH.isValid())
+                            pread->getXYZ(positionPH.value(ptoff));
+                        if (colorPH.isValid())
+                            pread->getRGB(colorPH.value(ptoff));
+                        if (intensityPH.isValid())
+                            pread->getIntensity(intensityPH.value(ptoff));
+                        if (returnIndexPH.isValid() && returnCountPH.isValid())
+                        {
+                            pread->getReturnNumber(returnIndexPH.value(ptoff));
+                            pread->getReturnCount(returnCountPH.value(ptoff));
+                        }
+                        if (timestampPH.isValid())
+                            pread->getGPSTime(timestampPH.value(ptoff));
+                    }
+                }
+            });
+
+    for (int i = 0; i < ptreaders.size(); ++i)
+        delete ptreaders(i);
+
+    if (myBoss.wasInterrupted())
+        return false;
 
     return true;
 }
@@ -3640,16 +3717,7 @@ LidarImporter::readPoints()
     if (filename.matchFileExtension(".las")
         || filename.matchFileExtension(".laz"))
     {
-        warnLASInapplicableParms();
-        std::ifstream stream(filename, std::ios_base::binary);
-        if (!stream.is_open())
-        {
-            myCookparms.sopAddError(
-                    SOP_ERR_LIDAR_READER_ERROR, "Failed to open the file.");
-            return false;
-        }
-
-        if (!readLASFile(stream))
+        if (!readLASFile())
         {
             myCookparms.sopAddError(
                     SOP_ERR_LIDAR_READER_ERROR,
@@ -3904,17 +3972,13 @@ LidarImporter::readInfo()
     if (filename.matchFileExtension(".las")
         || filename.matchFileExtension(".laz"))
     {
-
-        std::ifstream stream(filename, std::ios_base::binary);
-        if (!stream.is_open())
+        LASReader reader(myParms.getFilename().c_str());
+        if (!reader.isValid())
         {
             myCookparms.sopAddError(
                     SOP_ERR_LIDAR_READER_ERROR, "Failed to open the file.");
             return false;
         }
-
-        LASReader reader;
-        reader.openStream(stream);
 
         // LAS is single-scan.
         num_scans = 1;
