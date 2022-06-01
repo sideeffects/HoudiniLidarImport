@@ -2550,11 +2550,8 @@ private:
     bool readLASFile();
 
     // E57 read
-    bool readE57Scan(
-            UT_StringArray &missing_attribs,
-            E57Reader &reader,
-            int scan_index,
-            int64 &pt_idx);
+    void warnE57MissingAttribs(const E57Reader &reader);
+    bool readE57Scan(E57Reader &reader, int scan_index, int64 &pt_idx);
     bool readE57File();
     bool updateE57ColorFromImages(int image_index, E57Reader &reader);
 
@@ -3499,9 +3496,61 @@ LidarImporter::readLASFile()
 //*			       Lidar Importer: E57                             *
 //******************************************************************************
 
+void
+LidarImporter::warnE57MissingAttribs(const E57Reader& reader)
+{
+    using namespace SOP_LidarImportEnums;
+
+    UT_StringMap<UT_IntArray> scanmap;
+    for (int i = 0; i < reader.getNumScans(); ++i)
+    {
+        if (myParms.getColor() == Color::FROM_PTCLOUD && !reader.hasColor(i))
+            scanmap["Color"].append(i);
+
+        if (myParms.getIntensity() && !reader.hasIntensity(i))
+            scanmap["Intensity"].append(i);
+
+        if (myParms.getRet_data() && !reader.hasRetData(i))
+            scanmap["Return Data"].append(i);
+
+        if (myParms.getTimestamp() && !reader.hasTimestamp(i))
+            scanmap["Timestamp"].append(i);
+
+        if (myParms.getNormals() && !reader.hasNormals(i))
+            scanmap["Surface Normals"].append(i);
+
+        if (myParms.getRow_col() && !reader.hasRowCol(i))
+            scanmap["Row and Column"].append(i);
+
+        if (reader.getScanName(i) == "")
+            scanmap["Scan Name"].append(i);
+    }
+
+    UT_WorkBuffer msg;
+    for (auto it = scanmap.begin(); it != scanmap.end(); ++it)
+    {
+        if (it->second.size() == 0)
+            continue;
+
+        if (msg.length())
+            msg.append("; ");
+        msg.appendFormat("\"{}\" in scan", it->first);
+        if (it->second.size() > 1)
+            msg.append('s');
+
+        for (int i = 0; i < it->second.size(); ++i)
+        {
+            if (i)
+                msg.append(",");
+            msg.appendFormat(" {}", it->second(i));
+        }
+    }
+    if (scanmap.size() > 0)
+        myCookparms.sopAddWarning(SOP_WARN_ATTRIBS_NOT_FOUND, msg.buffer());
+}
+
 bool
 LidarImporter::readE57Scan(
-	    UT_StringArray &missing_attribs,
 	    E57Reader &reader,
 	    int scan_index,
 	    int64 &pt_idx)
@@ -3539,7 +3588,6 @@ LidarImporter::readE57Scan(
                 if (reader.hasSphericalInvalid(scan_index))
                     pt_reader_builder.sphericalPositionInvalid();
             }
-
             read_file_required = true;
         }
         else
@@ -3549,22 +3597,14 @@ LidarImporter::readE57Scan(
         }
     }
 
-    if (hasColorChanged()
-        && myParms.getColor() == Color::FROM_PTCLOUD)
+    if (hasColorChanged() && myParms.getColor() == Color::FROM_PTCLOUD
+        && reader.hasColor(scan_index))
     {
-        if (reader.hasColor(scan_index))
-        {
-            pt_reader_builder.color();
+        pt_reader_builder.color();
+        read_file_required = true;
 
-            if (reader.hasColorInvalid(scan_index))
-                pt_reader_builder.colorInvalid();
-
-            read_file_required = true;
-        }
-        else
-        {
-            missing_attribs.append(UT_StringHolder("color"));
-        }
+        if (reader.hasColorInvalid(scan_index))
+            pt_reader_builder.colorInvalid();
     }
     else if (hasColorChanged()
             && myParms.getColor() != Color::FROM_PTCLOUD)
@@ -3576,21 +3616,14 @@ LidarImporter::readE57Scan(
             myGdp->destroyPointGroup(invalid_group);
     }
 
-    if (hasIntensityChanged() && myParms.getIntensity())
+    if (hasIntensityChanged() && myParms.getIntensity()
+        && reader.hasIntensity(scan_index))
     {
-        if (reader.hasIntensity(scan_index))
-        {
-            pt_reader_builder.intensity();
+        pt_reader_builder.intensity();
+        read_file_required = true;
 
-            if (reader.hasIntensityInvalid(scan_index))
-                pt_reader_builder.intensityInvalid();
-
-            read_file_required = true;
-        }
-        else
-        {
-            missing_attribs.append(UT_StringHolder("intensity"));
-        }
+        if (reader.hasIntensityInvalid(scan_index))
+            pt_reader_builder.intensityInvalid();
     }
     else if (hasIntensityChanged() && !myParms.getIntensity())
     {
@@ -3602,19 +3635,12 @@ LidarImporter::readE57Scan(
             myGdp->destroyPointGroup(invalid_group);
     }
 
-    if (hasRowColChanged() && myParms.getRow_col())
+    if (hasRowColChanged() && myParms.getRow_col()
+        && reader.hasRowCol(scan_index))
     {
-        if (reader.hasRowCol(scan_index))
-        {
-            pt_reader_builder.rowIndex();
-            pt_reader_builder.columnIndex();
-
-            read_file_required = true;
-        }
-        else
-        {
-            missing_attribs.append(UT_StringHolder("row and column indices"));
-        }
+        pt_reader_builder.rowIndex();
+        pt_reader_builder.columnIndex();
+        read_file_required = true;
     }
     else if (hasRowColChanged() && !myParms.getRow_col())
     {
@@ -3622,19 +3648,12 @@ LidarImporter::readE57Scan(
         myGdp->destroyPointAttrib("column_index");
     }
 
-    if (hasRetDataChanged() && myParms.getRet_data())
+    if (hasRetDataChanged() && myParms.getRet_data()
+        && reader.hasRetData(scan_index))
     {
-        if (reader.hasRetData(scan_index))
-        {
-            pt_reader_builder.returnIndex();
-            pt_reader_builder.returnCount();
-
-            read_file_required = true;
-        }
-        else
-        {
-            missing_attribs.append(UT_StringHolder("return data"));
-        }
+        pt_reader_builder.returnIndex();
+        pt_reader_builder.returnCount();
+        read_file_required = true;
     }
     else if (hasRetDataChanged() && !myParms.getRet_data())
     {
@@ -3642,21 +3661,14 @@ LidarImporter::readE57Scan(
         myGdp->destroyPointAttrib("return_count");
     }
 
-    if (hasTimestampChanged() && myParms.getTimestamp())
+    if (hasTimestampChanged() && myParms.getTimestamp()
+        && reader.hasTimestamp(scan_index))
     {
-        if (reader.hasTimestamp(scan_index))
-        {
-            pt_reader_builder.timestamp();
+        pt_reader_builder.timestamp();
+        read_file_required = true;
 
-            if (reader.hasTimestampInvalid(scan_index))
-                pt_reader_builder.timestampInvalid();
-
-            read_file_required = true;
-        }
-        else
-        {
-            missing_attribs.append(UT_StringHolder("timestamps"));
-        }
+        if (reader.hasTimestampInvalid(scan_index))
+            pt_reader_builder.timestampInvalid();
     }
     else if (hasTimestampChanged() && !myParms.getTimestamp())
     {
@@ -3668,18 +3680,11 @@ LidarImporter::readE57Scan(
             myGdp->destroyPointGroup(invalid_group);
     }
 
-    if (hasNormalsChanged() && myParms.getNormals())
+    if (hasNormalsChanged() && myParms.getNormals()
+        && reader.hasNormals(scan_index))
     {
-        if (reader.hasNormals(scan_index))
-        {
-            pt_reader_builder.normals();
-
-            read_file_required = true;
-        }
-        else
-        {
-            missing_attribs.append(UT_StringHolder("surface normals"));
-        }
+        pt_reader_builder.normals();
+        read_file_required = true;
     }
     else if (hasNormalsChanged() && !myParms.getNormals())
     {
@@ -3898,18 +3903,19 @@ bool
 LidarImporter::readE57File()
 {
     using namespace SOP_LidarImportEnums;
-    if (!isReadPointsRequired())
-        return true;
-
     try
         {
             E57Reader reader(myParms.getFilename().c_str());
-            int num_scans = reader.getNumScans();
+            warnE57MissingAttribs(reader);
 
-            // Cache the bounding box of all E57 scans
+            if (!isReadPointsRequired())
+                return true;
+
+            // Cache the total bounding box of all E57 scans
             myCache->setFileBBox(reader.getFileBoundingBox());
 
             // Get the total points to be read, and bind the detached position
+            int num_scans = reader.getNumScans();
             exint pts_in_file = reader.getPointsInFile();
             if (isClearDetailRequired())
             {
@@ -3948,8 +3954,6 @@ LidarImporter::readE57File()
                 myCache->bindDetachedNormals(*myGdp);
 
             int64 pt_idx = 0;
-            UT_StringMap<UT_IntArray> missing_attrib_map;
-            UT_StringArray file_missing_attribs;
             for (int i = 0; i < num_scans; ++i)
             {
                 if (isClearDetailRequired())
@@ -3958,54 +3962,8 @@ LidarImporter::readE57File()
                     myCache->getScanGroupMap()[group_name].append(i);
 		}
 
-                UT_StringArray scan_missing_attribs;
-                if (!readE57Scan(scan_missing_attribs, reader, i, pt_idx))
+                if (!readE57Scan(reader, i, pt_idx))
                     return false;
-
-                if (scan_missing_attribs.entries() != 0)
-                {
-                    for (int j = 0, nj = scan_missing_attribs.entries(); j < nj;
-                         ++j)
-                    {
-                        missing_attrib_map[scan_missing_attribs(j)].append(i);
-
-                        if (file_missing_attribs.find(scan_missing_attribs(j))
-                            == -1)
-                            file_missing_attribs.append(
-                                    scan_missing_attribs(j));
-                    }
-                }
-            }
-
-            if (file_missing_attribs.entries() != 0)
-            {
-                UT_WorkBuffer warning_msg;
-                for (int i = 0, ni = file_missing_attribs.entries(); i < ni;
-                     ++i)
-                {
-                    UT_StringRef attrib(file_missing_attribs(i));
-                    UT_IntArray &scans_without_attrib
-                            = missing_attrib_map[attrib];
-
-                    warning_msg.append("\n- ");
-                    warning_msg.append(attrib);
-                    warning_msg.append(" in scan");
-
-                    if (scans_without_attrib.entries() > 1)
-                        warning_msg.append("s");
-
-                    for (int j = 0, nj = scans_without_attrib.entries(); j < nj;
-                         ++j)
-                    {
-                        warning_msg.appendFormat(
-                                " {}", scans_without_attrib(j) + 1);
-                        if (j < nj - 1)
-                            warning_msg.append(",");
-                    }
-                }
-
-                myCookparms.sopAddWarning(
-                        SOP_WARN_ATTRIBS_NOT_FOUND, warning_msg.buffer());
             }
 
             if (hasColorChanged()
