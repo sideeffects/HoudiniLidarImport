@@ -100,6 +100,206 @@ static const char *theDsFile = R"THEDSFILE(
 	}
     }
         groupsimple {
+	name	    "filtering"
+	label	    "Filtering"
+	grouptag    { "group_type" "simple" }
+    disablewhen "{ loadtype != points }"
+
+    parm {
+	    name    "filter_type"
+	    label   "Filter Type"
+	    type    ordinal
+	    default { "0" }
+	    menu {
+		    "no_filter" "None"
+		    "range_filter" "Range"
+		    "max_filter" "Maximum"
+	    }
+    }
+    parm {
+	    name    "select_range"
+	    label   "Select _ of _"
+	    type    integer
+	    size    2
+	    default { "1" "1" }
+	    range   { 0 10 }
+    disablewhen "{ filter_type != range_filter }"
+    }
+    parm {
+	    name    "max_points"
+	    label   "Max Number of Points"
+	    type    integer
+	    default { "0" }
+    disablewhen "{ filter_type != max_filter }"
+    }
+    parm {
+	    name    "delete_invalid"
+	    label   "Delete Invalid Points"
+	    type    toggle
+	    default { "off" }
+    }
+    } // Filtering
+        groupsimple {
+	name	    "attribs"
+	label	    "Attributes"
+	grouptag    { "group_type" "simple" }
+    disablewhen "{ loadtype != points }"
+    
+    parm {
+	    name    "color"
+	    label   "Color"
+	    type    ordinal
+	    default { "0" }
+	    menu {
+		    "none" "None"
+		    "from_ptcloud" "From Point Cloud"
+		    "from_images" "From Images"
+	    }
+    }
+    parm {
+	    name    "intensity"
+	    label   "Intensity"
+	    type    toggle
+	    default { "off" }
+    }
+    parm {
+	    name    "ret_data"
+	    label   "Return Data"
+	    type    toggle
+	    default { "off" }
+    }
+    parm {
+	    name    "timestamp"
+	    label   "Timestamp"
+	    type    toggle
+	    default { "off" }
+    }
+
+            groupcollapsible {
+	    name	    "e57"
+	    label	    "E57"
+	    grouptag    { "group_type" "collapsible" }
+        disablewhen "{ loadtype != points }"
+
+        parm {
+	        name    "normals"
+	        label   "Surface Normals"
+	        type    toggle
+	        default { "off" }
+        }
+        parm {
+	        name    "row_col"
+	        label   "Row and Column"
+	        type    toggle
+	        default { "off" }
+        }
+        parm {  
+                name    "scanindex"
+                label   "Scan Index"
+                type    toggle
+                default { "off" }
+        }
+        parm {
+	        name    "ptnames"
+	        label   "Scan Name"
+	        type    toggle
+	        default { "off" }
+        }
+                groupsimple {
+	        name	    "info"
+	        label	    "Scan Info (Legacy)"
+	        grouptag    { "group_type" "simple" }
+            disablewhen "{ loadtype != points }"
+    
+            parm {
+	            name    "group_prefix"
+	            label   "Group Prefix"
+	            type    string
+	            default { "lidar_group" }
+            }
+            parm {
+                    name    "scangroups"
+                    label   "Group Individual Scans"
+                    type    toggle
+                    default { "off" }
+            }
+            parm {
+	            name    "rigidtransforms"
+	            label   "Rigid Transforms"
+	            type    toggle
+	            default { "off" }
+            }
+            parm {
+	            name    "scannames"
+	            label   "Scan Name List"
+	            type    toggle
+	            default { "off" }
+            }
+            } // Scan Info
+        } // E57
+            groupcollapsible {
+	    name	    "las"
+	    label	    "LAS and LAZ"
+	    grouptag    { "group_type" "collapsible" }
+        disablewhen "{ loadtype != points }"
+
+        parm {
+                name    "classindex"
+                label   "Classification Index"
+                type    toggle
+                default { "off" }
+        }
+        parm {
+                name    "classname"
+                label   "Classification Name"
+                type    toggle
+                default { "off" }
+        }
+        parm {
+                name    "classflags"
+                label   "Classification Flags"
+                type    toggle
+                default { "off" }
+        }
+        parm {
+                name    "scannerchannel"
+                label   "Scanner Channel"
+                type    toggle
+                default { "off" }
+        }
+        parm {
+                name    "scanflags"
+                label   "Scan Flags"
+                type    toggle
+                default { "off" }
+        }
+        parm {
+                name    "userdata"
+                label   "User Data"
+                type    toggle
+                default { "off" }
+        }
+        parm {
+                name    "scanangle"
+                label   "Scan Angle"
+                type    toggle
+                default { "off" }
+        }
+        parm {
+                name    "pointsourceid"
+                label   "Point Source ID"
+                type    toggle
+                default { "off" }
+        }
+        parm {
+                name    "nearinfrared"
+                label   "Near Infrared"
+                type    toggle
+                default { "off" }
+        }
+        } //LAS and LAZ
+    } // Attributes
+groupsimple {
 	name	    "transform"
 	label	    "Transform"
 	grouptag    { "group_type" "simple" }
@@ -176,94 +376,14 @@ static const char *theDsFile = R"THEDSFILE(
 	default	{ "1" }
 	range	{ 0 10 }
     }
-    } // Transform
-    groupcollapsible {
-        name	    "parmgroup_pivotxform"
-        label	    "Pivot Transform"
-        grouptag    { "group_type" "collapsible" }
-
-	parm {
-	    name	"p"
-	    label	"Pivot Translate"
-	    type	vector
-	    size	3
-	    default	{ "0" "0" "0" }
-	    range	{ -1 1 }
-	}
-	parm {
-	    name	"pr"
-	    label	"Pivot Rotate"
-	    type	vector
-	    size	3
-	    default	{ "0" "0" "0" }
-	    range	{ 0 360 }
-	}
-    } // Pivot Transform
-    groupcollapsible {
-        name	    "parmgroup_prexform"
-        label	    "Pre-Transform"
-        grouptag    { "group_type" "collapsible" }
-
-	parm {
-	    name	"prexform_xOrd"
-	    label	"Pre-Transform Order"
-	    type	ordinal
-	    default	{ "srt" }
-	    menu	{
-		"srt"	"Scale Rot Trans"
-		"str"	"Scale Trans Rot"
-		"rst"	"Rot Scale Trans"
-		"rts"	"Rot Trans Scale"
-		"tsr"	"Trans Scale Rot"
-		"trs"	"Trans Rot Scale"
-	    }
-	    joinnext
-	}
-	parm {
-	    name	"prexform_rOrd"
-	    label	"Pre-Rotate Order"
-	    type	ordinal
-	    nolabel
-	    default	{ "xyz" }
-	    menu	{
-		"xyz"	"Rx Ry Rz"
-		"xzy"	"Rx Rz Ry"
-		"yxz"	"Ry Rx Rz"
-		"yzx"	"Ry Rz Rx"
-		"zxy"	"Rz Rx Ry"
-		"zyx"	"Rz Ry Rx"
-	    }
-	}
-	parm {
-	    name	"prexform_t"
-	    label	"Pre-Translate"
-	    type	vector
-	    size	3
-	    default	{ 0 0 0 }
-	}
-	parm {
-	    name	"prexform_r"
-	    label	"Pre-Rotate"
-	    type	vector
-	    size	3
-	    default	{ 0 0 0 }
-	}
-	parm {
-	    name	"prexform_s"
-	    label	"Pre-Scale"
-	    type	vector
-	    size	3
-	    default	{ 1 1 1 }
-	}
-	parm {
-	    name	"prexform_shear"
-	    label	"Pre-Shear"
-	    type	float
-	    size	3
-	    default	{ "0" "0" "0" }
-	    range	{ 0 10 }
-	}
-    } // Pre-Transform
+    parm {
+        name    "sepparm"
+        label   "Spacer"
+        type    separator
+        default { "" }
+        parmtag { "sidefx::layout_height" "medium" }
+        parmtag { "sidefx::look" "blank" }
+    }
     parm {
 	    name    "centroid"
 	    label   "Centroid"
@@ -293,137 +413,94 @@ static const char *theDsFile = R"THEDSFILE(
     	default	{ "0" }
     	range	{ 0 1 }
     }
-        groupsimple {
-	name	    "filtering"
-	label	    "Filtering"
-	grouptag    { "group_type" "simple" }
-    disablewhen "{ loadtype != points }"
-
-    parm {
-	    name    "filter_type"
-	    label   "Filter Type"
-	    type    ordinal
-	    default { "0" }
-	    menu {
-		    "no_filter" "None"
-		    "range_filter" "Range"
-		    "max_filter" "Maximum"
-	    }
-    }
-    parm {
-	    name    "select_range"
-	    label   "Select _ of _"
-	    type    integer
-	    size    2
-	    default { "1" "1" }
-	    range   { 0 10 }
-    disablewhen "{ filter_type != range_filter }"
-    }
-    parm {
-	    name    "max_points"
-	    label   "Max Number of Points"
-	    type    integer
-	    default { "0" }
-    disablewhen "{ filter_type != max_filter }"
-    }
-    parm {
-	    name    "delete_invalid"
-	    label   "Delete Invalid Points"
-	    type    toggle
-	    default { "off" }
-    }
-    } // Filtering
-        groupsimple {
-	name	    "attribs"
-	label	    "Attributes"
-	grouptag    { "group_type" "simple" }
-    disablewhen "{ loadtype != points }"
-    
-    parm {
-	    name    "color"
-	    label   "Color"
-	    type    ordinal
-	    default { "0" }
-	    menu {
-		    "none" "None"
-		    "from_ptcloud" "From Point Cloud"
-		    "from_images" "From Images"
-	    }
-    }
-    parm {
-	    name    "intensity"
-	    label   "Intensity"
-	    type    toggle
-	    default { "off" }
-    }
-    parm {
-	    name    "row_col"
-	    label   "Row and Column"
-	    type    toggle
-	    default { "off" }
-    }
-    parm {
-	    name    "ret_data"
-	    label   "Return Data"
-	    type    toggle
-	    default { "off" }
-    }
-    parm {
-	    name    "timestamp"
-	    label   "Timestamp"
-	    type    toggle
-	    default { "off" }
-    }
-    parm {
-	    name    "normals"
-	    label   "Surface Normals"
-	    type    toggle
-	    default { "off" }
-    }
-    parm {  
-            name    "scanindex"
-            label   "Scan Index"
-            type    toggle
-            default { "off" }
-    }
-    parm {
-	    name    "ptnames"
-	    label   "Scan Name"
-	    type    toggle
-	    default { "off" }
-    }
-    } // Attributes
         groupcollapsible {
-	name	    "info"
-	label	    "Scan Info (deprecated)"
-	grouptag    { "group_type" "collapsible" }
-    disablewhen "{ loadtype != points }"
-    
-    parm {
-	    name    "group_prefix"
-	    label   "Group Prefix"
-	    type    string
-	    default { "lidar_group" }
-    }
-    parm {
-            name    "scangroups"
-            label   "Group Individual Scans"
-            type    toggle
-            default { "off" }
-    }
-    parm {
-	    name    "rigidtransforms"
-	    label   "Rigid Transforms"
-	    type    toggle
-	    default { "off" }
-    }
-    parm {
-	    name    "scannames"
-	    label   "Scan Name List"
-	    type    toggle
-	    default { "off" }
-    }
-    } // Scan Info
+            name	    "parmgroup_pivotxform"
+            label	    "Pivot Transform"
+            grouptag    { "group_type" "collapsible" }
+
+	    parm {
+	        name	"p"
+	        label	"Pivot Translate"
+	        type	vector
+	        size	3
+	        default	{ "0" "0" "0" }
+	        range	{ -1 1 }
+	    }
+	    parm {
+	        name	"pr"
+	        label	"Pivot Rotate"
+	        type	vector
+	        size	3
+	        default	{ "0" "0" "0" }
+	        range	{ 0 360 }
+	    }
+        } // Pivot Transform
+        groupcollapsible {
+            name	    "parmgroup_prexform"
+            label	    "Pre-Transform"
+            grouptag    { "group_type" "collapsible" }
+
+	    parm {
+	        name	"prexform_xOrd"
+	        label	"Pre-Transform Order"
+	        type	ordinal
+	        default	{ "srt" }
+	        menu	{
+		    "srt"	"Scale Rot Trans"
+		    "str"	"Scale Trans Rot"
+		    "rst"	"Rot Scale Trans"
+		    "rts"	"Rot Trans Scale"
+		    "tsr"	"Trans Scale Rot"
+		    "trs"	"Trans Rot Scale"
+	        }
+	        joinnext
+	    }
+	    parm {
+	        name	"prexform_rOrd"
+	        label	"Pre-Rotate Order"
+	        type	ordinal
+	        nolabel
+	        default	{ "xyz" }
+	        menu	{
+		    "xyz"	"Rx Ry Rz"
+		    "xzy"	"Rx Rz Ry"
+		    "yxz"	"Ry Rx Rz"
+		    "yzx"	"Ry Rz Rx"
+		    "zxy"	"Rz Rx Ry"
+		    "zyx"	"Rz Ry Rx"
+	        }
+	    }
+	    parm {
+	        name	"prexform_t"
+	        label	"Pre-Translate"
+	        type	vector
+	        size	3
+	        default	{ 0 0 0 }
+	    }
+	    parm {
+	        name	"prexform_r"
+	        label	"Pre-Rotate"
+	        type	vector
+	        size	3
+	        default	{ 0 0 0 }
+	    }
+	    parm {
+	        name	"prexform_s"
+	        label	"Pre-Scale"
+	        type	vector
+	        size	3
+	        default	{ 1 1 1 }
+	    }
+	    parm {
+	        name	"prexform_shear"
+	        label	"Pre-Shear"
+	        type	float
+	        size	3
+	        default	{ "0" "0" "0" }
+	        range	{ 0 10 }
+	    }
+        } // Pre-Transform
+    } // Transform
 }
 )THEDSFILE";
 
@@ -436,7 +513,6 @@ SOP_LidarImport::~SOP_LidarImport() {}
 
 // N-scangroups was a default behavior of the SOP. Now it is a deprecated
 // explicit toggle that is set to 'on' for older .hip files.
-//@TODO: Update the version string before commit.
 void
 SOP_LidarImport::syncNodeVersion(
     const char *old_version, const char *cur_version, bool *node_deleted)
@@ -704,42 +780,37 @@ public:
     SYS_FORCE_INLINE bool hasGPSTime() const { return myHasGPSTime; }
     SYS_FORCE_INLINE bool hasRGB() const { return myHasRGB; }
     SYS_FORCE_INLINE bool hasNIR() const { return myHasNIR; }
-    SYS_FORCE_INLINE bool hasClassificationFlagOverlap() const
-    {
-        return myHasClassificationFlagOverlap;
-    }
+    SYS_FORCE_INLINE bool hasClassFlagOverlap() const
+    { return myHasClassFlagOverlap; }
     SYS_FORCE_INLINE bool hasScannerChannel() const
-    {
-        return myHasScannerChannel;
-    }
+    { return myHasScannerChannel; }
 
     SYS_FORCE_INLINE UT_Vector3D getScale() const { return myScale; }
     SYS_FORCE_INLINE UT_Vector3D getOffset() const { return myOffset; }
     SYS_FORCE_INLINE UT_BoundingBoxD getBoundingBox() const
-    {
-        return myFileBoundingBox;
-    }
+    { return myFileBoundingBox; }
 
     // myScale and myOffset must be applied to get the true xyz coords.
     SYS_FORCE_INLINE void getXYZ(UT_Vector3D &xyz) const;
     SYS_FORCE_INLINE void getIntensity(fpreal32 &in) const;
-    SYS_FORCE_INLINE void getUserData(int8 &in) const;
-    SYS_FORCE_INLINE void getPointSourceID(int16 &in) const;
+    SYS_FORCE_INLINE void getUserData(uint8 &in) const;
+    SYS_FORCE_INLINE void getPointSourceID(int32 &in) const;
     SYS_FORCE_INLINE void getGPSTime(fpreal64 &in) const;
     SYS_FORCE_INLINE void getRGB(UT_Vector3F &rgb) const;
     SYS_FORCE_INLINE void getNIR(fpreal32 &in) const;
 
     // These methods differ between legacy formats (0-5) and LAS 1.4 (6-10).
+    // Flags are read into uint8 attributes, instead of groups.
     SYS_FORCE_INLINE void getReturnNumber(uint8 &in) const;
     SYS_FORCE_INLINE void getReturnCount(uint8 &in) const;
-    SYS_FORCE_INLINE void getClassificationFlagSynthetic(bool &in) const;
-    SYS_FORCE_INLINE void getClassificationFlagKeyPoint(bool &in) const;
-    SYS_FORCE_INLINE void getClassificationFlagWithheld(bool &in) const;
-    SYS_FORCE_INLINE void getClassificationFlagOverlap(bool &in) const;
+    SYS_FORCE_INLINE void getClassFlagSynthetic(uint8 &in) const;
+    SYS_FORCE_INLINE void getClassFlagKeyPoint(uint8 &in) const;
+    SYS_FORCE_INLINE void getClassFlagWithheld(uint8 &in) const;
+    SYS_FORCE_INLINE void getClassFlagOverlap(uint8 &in) const;
     SYS_FORCE_INLINE void getScannerChannel(uint8 &in) const;
-    SYS_FORCE_INLINE void getScanDirectionFlag(bool &in) const;
-    SYS_FORCE_INLINE void getEdgeFlightLineFlag(bool &in) const;
-    SYS_FORCE_INLINE void getClassification(uint8 &in) const;
+    SYS_FORCE_INLINE void getScanDirectionFlag(uint8 &in) const;
+    SYS_FORCE_INLINE void getEdgeFlightLineFlag(uint8 &in) const;
+    SYS_FORCE_INLINE void getClassIndex(uint8 &in) const;
     SYS_FORCE_INLINE void getScanAngle(fpreal32 &in) const;
 
 private:
@@ -759,8 +830,8 @@ private:
     bool myHasGPSTime = false;
     bool myHasRGB = false;
     bool myHasNIR = false;
-    bool myHasClassificationFlagOverlap = false;
-    bool myHasScannerChannel = false; // LAS 1.4 only.
+    bool myHasClassFlagOverlap = false;
+    bool myHasScannerChannel = false;
 
     void closeReader();
     void destroyReader();
@@ -851,9 +922,10 @@ LASReader::destroyReader()
 void
 LASReader::initializeAvailableAttribs()
 {
+    // LAS 1.4 point formats:
     if (myPointFormat > 5)
     {
-        myHasClassificationFlagOverlap = true;
+        myHasClassFlagOverlap = true;
         myHasScannerChannel = true;
     }
 
@@ -887,15 +959,15 @@ LASReader::getIntensity(fpreal32 &in) const
 }
 
 void
-LASReader::getUserData(int8 &in) const
+LASReader::getUserData(uint8 &in) const
 {
     in = myPoint->user_data;
 }
 
 void
-LASReader::getPointSourceID(int16 &in) const
+LASReader::getPointSourceID(int32 &in) const
 {
-    in = myPoint->point_source_ID;
+    in = (int32)myPoint->point_source_ID;
 }
 
 void
@@ -936,7 +1008,7 @@ LASReader::getReturnCount(uint8 &in) const
 }
 
 void
-LASReader::getClassificationFlagSynthetic(bool &in) const
+LASReader::getClassFlagSynthetic(uint8 &in) const
 {
     if (myPointFormat > 5)
         in = myPoint->extended_classification_flags & 0x1;
@@ -945,27 +1017,27 @@ LASReader::getClassificationFlagSynthetic(bool &in) const
 }
 
 void
-LASReader::getClassificationFlagKeyPoint(bool &in) const
+LASReader::getClassFlagKeyPoint(uint8 &in) const
 {
     if (myPointFormat > 5)
-        in = myPoint->extended_classification_flags & 0x2;
+        in = (myPoint->extended_classification_flags & 0x2) >> 1;
     else
         in = myPoint->keypoint_flag;
 }
 
 void
-LASReader::getClassificationFlagWithheld(bool &in) const
+LASReader::getClassFlagWithheld(uint8 &in) const
 {
     if (myPointFormat > 5)
-        in = myPoint->extended_classification_flags & 0x4;
+        in = (myPoint->extended_classification_flags & 0x4) >> 2;
     else
         in = myPoint->withheld_flag;
 }
 
 void
-LASReader::getClassificationFlagOverlap(bool &in) const
+LASReader::getClassFlagOverlap(uint8 &in) const
 {
-    in = myPoint->extended_classification_flags & 0x8;
+    in = (myPoint->extended_classification_flags & 0x8) >> 3;
 }
 
 void
@@ -975,19 +1047,19 @@ LASReader::getScannerChannel(uint8 &in) const
 }
 
 void
-LASReader::getScanDirectionFlag(bool &in) const
+LASReader::getScanDirectionFlag(uint8 &in) const
 {
     in = myPoint->scan_direction_flag;
 }
 
 void
-LASReader::getEdgeFlightLineFlag(bool &in) const
+LASReader::getEdgeFlightLineFlag(uint8 &in) const
 {
     in = myPoint->edge_of_flight_line;
 }
 
 void
-LASReader::getClassification(uint8 &in) const
+LASReader::getClassIndex(uint8 &in) const
 {
     if (myPointFormat > 5)
         in = myPoint->extended_classification;
@@ -1000,9 +1072,9 @@ void
 LASReader::getScanAngle(fpreal32 &in) const
 {
     if (myPointFormat > 5)
-        in = myPoint->extended_scan_angle * 0.006;
+        in = (fpreal32)myPoint->extended_scan_angle * 0.006f;
     else
-        in = myPoint->scan_angle_rank;
+        in = (fpreal32)myPoint->scan_angle_rank;
 }
 } // namespace
 //******************************************************************************
@@ -2450,7 +2522,6 @@ private:
 //******************************************************************************
 //*			        Lidar Importer                                 *
 //******************************************************************************
-
 namespace 
 {
 // Takes in SOP parameters and adds/removes the minimum neccessary data.
@@ -2474,7 +2545,8 @@ private:
     void buildInfoCube(const UT_BoundingBoxD &bbox);
 
     // LAS read
-    void warnLASInapplicableParms();
+    void warnLASMissingAttribs(const LASReader &reader);
+    bool copyClassIndexToString(GA_Attribute *index, GA_Attribute *string);
     bool readLASFile();
 
     // E57 read
@@ -2505,6 +2577,24 @@ private:
     { return myParms.getRow_col() != myCachedParms.getRow_col(); }
     bool hasRetDataChanged() const
     { return myParms.getRet_data() != myCachedParms.getRet_data(); }
+    bool hasClassIndexChanged() const
+    { return myParms.getClassindex() != myCachedParms.getClassindex(); }
+    bool hasClassNameChanged() const
+    { return myParms.getClassname() != myCachedParms.getClassname(); }
+    bool hasClassFlagsChanged() const
+    { return myParms.getClassflags() != myCachedParms.getClassflags(); }
+    bool hasScannerChannelChanged() const
+    { return myParms.getScannerchannel() != myCachedParms.getScannerchannel(); }
+    bool hasScanFlagsChanged() const
+    { return myParms.getScanflags() != myCachedParms.getScanflags(); }
+    bool hasUserDataChanged() const
+    { return myParms.getUserdata() != myCachedParms.getUserdata(); }
+    bool hasScanAngleChanged() const
+    { return myParms.getScanangle() != myCachedParms.getScanangle(); }
+    bool hasPointSourceIDChanged() const
+    { return myParms.getPointsourceid() != myCachedParms.getPointsourceid(); }
+    bool hasNearInfraredChanged() const
+    { return myParms.getNearinfrared() != myCachedParms.getNearinfrared(); }
     bool hasTimestampChanged() const
     { return myParms.getTimestamp() != myCachedParms.getTimestamp(); }
     bool hasNormalsChanged() const
@@ -2691,6 +2781,18 @@ LidarImporter::isReadPointsRequired() const
     // E57 specific attributes:
     UT_String filename;
     filename = myParms.getFilename();
+
+    if ((filename.matchFileExtension(".las")
+         || filename.matchFileExtension(".laz"))
+        && (hasClassIndexChanged() || hasClassNameChanged()
+            || hasClassFlagsChanged() || hasScannerChannelChanged()
+            || hasScanFlagsChanged() || hasUserDataChanged()
+            || hasScanAngleChanged() || hasPointSourceIDChanged()
+            || hasNearInfraredChanged()))
+    {
+        return true;
+    }
+
     if (filename.matchFileExtension(".e57")
         && (hasRowColChanged() || hasNormalsChanged()
             || hasRigidTransformsChanged() || hasScanNamesChanged()
@@ -2822,32 +2924,125 @@ LidarImporter::computeRange(int &range_good, int &range_size, exint pts_in_file)
 //******************************************************************************
 
 void
-LidarImporter::warnLASInapplicableParms()
+LidarImporter::warnLASMissingAttribs(const LASReader& reader)
 {
     using namespace SOP_LidarImportEnums;
-    UT_StringArray inapplicable_parms;
 
     if (myParms.getColor() == Color::FROM_IMAGES)
-        inapplicable_parms.append("Color From Images");
-    if (myParms.getDelete_invalid())
-        inapplicable_parms.append("Delete Invalid Points");
-    if (myParms.getRow_col())
-        inapplicable_parms.append("Row and Column");
-    if (myParms.getNormals())
-        inapplicable_parms.append("Surface Normals");
-    if (inapplicable_parms.entries() != 0)
-    {
-        UT_WorkBuffer warning_msg;
-        for (int i = 0, ni = inapplicable_parms.entries(); i < ni; ++i)
-        {
-            warning_msg.append(inapplicable_parms(i));
-            if (i < ni - 1)
-                warning_msg.append(", ");
-        }
+        myCookparms.sopAddWarning(SOP_WARN_PARMS_NOT_APPLICABLE, "\"Color From Images\"");
 
-        myCookparms.sopAddWarning(
-                SOP_WARN_PARMS_NOT_APPLICABLE, warning_msg.buffer());
+    UT_StringArray missingattribs;
+    if (myParms.getColor() == Color::FROM_PTCLOUD && !reader.hasRGB())
+        missingattribs.append(UT_StringHolder("Color"));
+
+    if (myParms.getTimestamp() && !reader.hasGPSTime())
+        missingattribs.append(UT_StringHolder("Timestamp"));
+
+    if (myParms.getClassflags() && !reader.hasClassFlagOverlap())
+        missingattribs.append(UT_StringHolder("Classification Flag: overlap"));
+
+    if (myParms.getScannerchannel() && !reader.hasScannerChannel())
+        missingattribs.append(UT_StringHolder("Scanner Channel"));
+
+    if (myParms.getNearinfrared() && !reader.hasNIR())
+        missingattribs.append(UT_StringHolder("Near Infrared"));
+
+    UT_WorkBuffer msg;
+    for (int i = 0; i < missingattribs.entries(); ++i)
+    {
+        if (i)
+            msg.append(", ");
+        msg.append('"');
+        msg.append(missingattribs(i));
+        msg.append('"');
     }
+    if (missingattribs.entries() > 0)
+        myCookparms.sopAddWarning(SOP_WARN_ATTRIBS_NOT_FOUND, msg.buffer());
+}
+
+// Copies the 8-bit classification index into its equivalent string, using 
+// the LAS standard names. Undefined classes are named "Class_<classidx>".
+//
+// Note: LAS has a standard for embedding custom class definitions, but it is
+// so rarely used, that it does not make sense to support it. For now, update
+// 'themap' to any standard class definitions in future revisions
+// (i.e. the upcoming LAS 1.4 R16).
+//
+// If the future LAS 1.5 redesigns custom class definitions, and other software
+// start to support/preserve them (such as CloudCompare), then it would be good
+// for Houdini to add support as well.
+bool
+LidarImporter::copyClassIndexToString(GA_Attribute *indexattrib, GA_Attribute *stringattrib)
+{  
+    static const char *themap[] = {
+        "Created_Never_Classified", // 0
+        "Unclassified",             // 1
+        "Ground",                   // 2
+        "Low_Vegetation",           // 3
+        "Medium_Vegetation",        // 4
+        "High_Vegetation",          // 5
+        "Building",                 // 6
+        "Low_Point",                // 7
+        "Model_Keypoint",           // 8
+        "Water",                    // 9
+        "Rail",                     // 10
+        "Road_Surface",             // 11
+        "Overlap_Points",           // 12
+        "Wire_Guard",               // 13
+        "Wire_Conductor",           // 14
+        "Transmission_Tower",       // 15
+        "Wire_Structure_Connector", // 16
+        "Bridge_Deck",              // 17
+        "High_Noise",               // 18
+        "Overhead_Structure",       // 19
+        "Ignored_Ground ",          // 20
+        "Snow",                     // 21
+        "Temporal_Exclusion",       // 22
+    };
+
+    if (!indexattrib || !stringattrib)
+        return false;
+    else
+    {
+        GA_RWBatchHandleS batch(stringattrib);
+        GA_PageHandleScalar<uint8>::ROType indexPH(indexattrib);
+        if (batch.isInvalid() || indexPH.isInvalid())
+            return false;
+    }
+
+    auto stuple = stringattrib->getAIFSharedStringTuple();
+    if (!stuple)
+        return false;
+
+    UT_IntArray handlemap(UINT8_MAX, UINT8_MAX);
+    GA_AIFSharedStringTuple::StringBuffer stringbuf(stringattrib, stuple);
+
+    int i;
+    for (i = 0; i < (sizeof(themap) / sizeof(const char *)); ++i)
+        handlemap[i] = stringbuf.append(themap[i]);
+    UT_WorkBuffer buf;
+    for (; i <= UINT8_MAX; ++i)
+    {
+        buf.sprintf("Class_%d", i);
+        handlemap[i] = stringbuf.append(buf.buffer());
+    }
+
+    UTparallelFor(
+            GA_SplittableRange(myGdp->getPointRange()),
+            [&](const GA_SplittableRange &r)
+            {
+                GA_RWBatchHandleS batch(stringattrib);
+                GA_PageHandleScalar<uint8>::ROType indexPH(indexattrib);
+
+                GA_Offset start, end;
+                for (GA_Iterator it(r); it.blockAdvance(start, end);)
+                {
+                    indexPH.setPage(start);
+                    for (GA_Offset pt = start; pt != end; ++pt)
+                        batch.set(pt, handlemap(indexPH.get(pt)));
+                }
+            });
+    return true;
 }
 
 // Read a .las or .laz file for a SOP cook. Returns true if successful.
@@ -2855,8 +3050,7 @@ bool
 LidarImporter::readLASFile()
 {
     using namespace SOP_LidarImportEnums;
-    if (!isReadPointsRequired())
-        return true;
+
 
     LASReader *reader = new LASReader(myParms.getFilename().c_str());
     if (!reader->isValid())
@@ -2864,6 +3058,10 @@ LidarImporter::readLASFile()
         delete reader;
         return false;
     }
+
+    warnLASMissingAttribs(*reader);
+    if (!isReadPointsRequired())
+        return true;
 
     // Scrape metadata
     UT_BoundingBoxD box = reader->getBoundingBox();
@@ -2897,20 +3095,13 @@ LidarImporter::readLASFile()
     // Add / remove requested attributes
     if (hasColorChanged())
     {
-        if (myParms.getColor() == Color::FROM_PTCLOUD)
+        if (myParms.getColor() == Color::FROM_PTCLOUD && reader->hasRGB())
         {
-            if (reader->hasRGB())
-            {
-                myGdp->addDiffuseAttribute(GA_ATTRIB_POINT);
-                read_required = true;
-            }
-            else
-                myCookparms.sopAddWarning(SOP_WARN_ATTRIBS_NOT_FOUND, "Color");
+            myGdp->addDiffuseAttribute(GA_ATTRIB_POINT);
+            read_required = true;
         }
         else
-        {
             myGdp->destroyDiffuseAttribute(GA_ATTRIB_POINT);
-        }
     }
     if (hasIntensityChanged())
     {
@@ -2936,31 +3127,158 @@ LidarImporter::readLASFile()
             myGdp->destroyPointAttrib("return_count");
         }
     }
-    if (hasTimestampChanged())
+    // We copy over the class index data to generate the class names, and thus
+    // delete it if its no longer needed at the end of reading.
+    bool delete_class_index = false;
+    if (hasClassIndexChanged())
     {
-        if (myParms.getTimestamp())
+        if (myParms.getClassindex())
         {
-            if (reader->hasGPSTime())
+            myGdp->addIntTuple(
+                    GA_ATTRIB_POINT, "class_index", 1, GA_Defaults(), nullptr,
+                    nullptr, GA_STORE_UINT8);
+            read_required = true;
+        }
+        else if (!(hasClassNameChanged() && myParms.getClassname()))
+            delete_class_index = true;
+    }
+    if (hasClassNameChanged())
+    {
+        if (myParms.getClassname())
+        {
+            myGdp->addStringTuple(GA_ATTRIB_POINT, "class_name", 1);
+
+            // For reading in parallel, create class_index if it doesn't exist.
+            if (!myGdp->findPointAttribute("class_index"))
             {
-                myGdp->addFloatTuple(
-                        GA_ATTRIB_POINT, "timestamp", 1, GA_Defaults(), nullptr, nullptr, GA_STORE_REAL64);
+                myGdp->addIntTuple(
+                        GA_ATTRIB_POINT, "class_index", 1, GA_Defaults(),
+                        nullptr, nullptr, GA_STORE_UINT8);
+                delete_class_index = true;
                 read_required = true;
             }
-            else
-                myCookparms.sopAddWarning(
-                        SOP_WARN_ATTRIBS_NOT_FOUND, "Timestamp");
+        }
+        else
+            myGdp->destroyPointAttrib("class_name");
+    }
+    if (hasClassFlagsChanged())
+    {
+        if (myParms.getClassflags())
+        {
+            myGdp->addTuple(
+                    GA_STORE_UINT8, GA_ATTRIB_POINT, "classflag_synthetic", 1);
+            myGdp->addTuple(
+                    GA_STORE_UINT8, GA_ATTRIB_POINT, "classflag_keypoint", 1);
+            myGdp->addTuple(
+                    GA_STORE_UINT8, GA_ATTRIB_POINT, "classflag_withheld", 1);
+			
+	    if (reader->hasClassFlagOverlap())
+                myGdp->addTuple(
+                        GA_STORE_UINT8, GA_ATTRIB_POINT, "classflag_overlap", 1);
+
+            read_required = true;
         }
         else
         {
-            myGdp->destroyPointAttrib("timestamp");
+            myGdp->destroyPointAttrib("classflag_synthetic");
+            myGdp->destroyPointAttrib("classflag_keypoint");
+            myGdp->destroyPointAttrib("classflag_withheld");
+            myGdp->destroyPointAttrib("classflag_overlap");
         }
+    }
+    if (hasScannerChannelChanged())
+    {
+        if (myParms.getScannerchannel() && reader->hasScannerChannel())
+        {
+            myGdp->addTuple(GA_STORE_UINT8, GA_ATTRIB_POINT, "scanner_channel", 1);
+            read_required = true;
+        }
+        else
+            myGdp->destroyPointAttrib("scanner_channel");
+    }
+    if (hasScanFlagsChanged())
+    {
+        if (myParms.getScanflags())
+        {
+            myGdp->addTuple(
+                    GA_STORE_UINT8, GA_ATTRIB_POINT, "scanflag_direction", 1);
+            myGdp->addTuple(
+                    GA_STORE_UINT8, GA_ATTRIB_POINT, "scanflag_edge", 1);
+            read_required = true;
+        }
+        else
+        {
+            myGdp->destroyPointAttrib("scanflag_direction");
+            myGdp->destroyPointAttrib("scanflag_edge");
+        }
+    }
+    if (hasUserDataChanged())
+    {
+        if (myParms.getUserdata())
+        {
+            myGdp->addTuple(GA_STORE_UINT8, GA_ATTRIB_POINT, "user_data", 1);
+            read_required = true;
+        }
+        else
+            myGdp->destroyPointAttrib("user_data");
+    }
+    if (hasScanAngleChanged())
+    {
+        if (myParms.getScanangle())
+        {
+            myGdp->addFloatTuple(GA_ATTRIB_POINT, "scan_angle", 1);
+            read_required = true;
+        }
+        else
+            myGdp->destroyPointAttrib("scan_angle");
+    }
+    if (hasPointSourceIDChanged())
+    {
+        if (myParms.getPointsourceid())
+        {
+            myGdp->addIntTuple(GA_ATTRIB_POINT, "source_id", 1);
+            read_required = true;
+        }
+        else
+            myGdp->destroyPointAttrib("source_id");
+    }
+    if (hasTimestampChanged())
+    {
+        if (myParms.getTimestamp() && reader->hasGPSTime())
+        {
+            myGdp->addFloatTuple(
+                    GA_ATTRIB_POINT, "timestamp", 1, GA_Defaults(), nullptr,
+                    nullptr, GA_STORE_REAL64);
+            read_required = true;
+        }
+        else
+            myGdp->destroyPointAttrib("timestamp");
+    }
+    if (hasNearInfraredChanged())
+    {
+        if (myParms.getNearinfrared() && reader->hasNIR())
+        {
+            myGdp->addFloatTuple(GA_ATTRIB_POINT, "near_infrared", 1);
+            read_required = true;
+        }
+        else
+            myGdp->destroyPointAttrib("near_infrared");
     }
 
     // Stop if no new attributes need to be read.
     if (!read_required || !num_pts)
     {
         delete reader;
-        return true;
+        bool result = true;
+        if (hasClassNameChanged() && myParms.getClassname())
+        {
+            result &= copyClassIndexToString(
+                    myGdp->findPointAttribute("class_index"),
+                    myGdp->findPointAttribute("class_name"));
+        }
+        if (delete_class_index)
+            myGdp->destroyPointAttrib("class_index");
+        return result;
     }
 
     // Generate point readers
@@ -2989,7 +3307,19 @@ LidarImporter::readLASFile()
     GA_Attribute *intensity(myGdp->findPointAttribute("intensity"));
     GA_Attribute *returnIndex(myGdp->findPointAttribute("return_index"));
     GA_Attribute *returnCount(myGdp->findPointAttribute("return_count"));
+    GA_Attribute *classIndex(myGdp->findPointAttribute("class_index"));
+    GA_Attribute *cflagSynthetic(myGdp->findPointAttribute("classflag_synthetic"));
+    GA_Attribute *cflagKeypoint(myGdp->findPointAttribute("classflag_keypoint"));
+    GA_Attribute *cflagWithheld(myGdp->findPointAttribute("classflag_withheld"));
+    GA_Attribute *cflagOverlap(myGdp->findPointAttribute("classflag_overlap"));
+    GA_Attribute *scannerchannel(myGdp->findPointAttribute("scanner_channel"));
+    GA_Attribute *sflagDirection(myGdp->findPointAttribute("scanflag_direction"));
+    GA_Attribute *sflagEdge(myGdp->findPointAttribute("scanflag_edge"));
+    GA_Attribute *userData(myGdp->findPointAttribute("user_data"));
+    GA_Attribute *scanAngle(myGdp->findPointAttribute("scan_angle"));
+    GA_Attribute *sourceID(myGdp->findPointAttribute("source_id"));
     GA_Attribute *timestamp(myGdp->findPointAttribute("timestamp"));
+    GA_Attribute *nearInfrared(myGdp->findPointAttribute("near_infrared"));
 
     // Read the requested attributes
     exint seek_size = static_cast<exint>(range_size - range_good);
@@ -3004,7 +3334,27 @@ LidarImporter::readLASFile()
                 GA_RWPageHandleF intensityPH(intensity);
                 GA_PageHandleScalar<uint8>::RWType returnIndexPH(returnIndex);
                 GA_PageHandleScalar<uint8>::RWType returnCountPH(returnCount);
+                GA_PageHandleScalar<uint8>::RWType classIndexPH(classIndex);
+                GA_PageHandleScalar<uint8>::RWType cflagSyntheticPH(cflagSynthetic);
+                GA_PageHandleScalar<uint8>::RWType cflagKeypointPH(cflagKeypoint);
+                GA_PageHandleScalar<uint8>::RWType cflagWithheldPH(cflagWithheld);
+                GA_PageHandleScalar<uint8>::RWType cflagOverlapPH(cflagOverlap);
+                GA_PageHandleScalar<uint8>::RWType scannerchannelPH(scannerchannel);
+                GA_PageHandleScalar<uint8>::RWType sflagDirectionPH(sflagDirection);
+                GA_PageHandleScalar<uint8>::RWType sflagEdgePH(sflagEdge);
+                GA_PageHandleScalar<uint8>::RWType userDataPH(userData);
+                GA_RWPageHandleF scanAnglePH(scanAngle);
+                GA_RWPageHandleI sourceIDPH(sourceID);
                 GA_RWPageHandleD timestampPH(timestamp);
+                GA_RWPageHandleF nearInfraredPH(nearInfrared);
+
+                bool cflags_valid = cflagSyntheticPH.isValid()
+                                  && cflagKeypointPH.isValid()
+                                  && cflagWithheldPH.isValid()
+                                  && cflagOverlapPH.isValid();
+
+                bool sflags_valid = sflagDirectionPH.isValid()
+                                    && sflagEdgePH.isValid();
 
                 exint start_page = (idx * num_pages) / ptreaders.size()
                                    + first_pagenum;
@@ -3034,8 +3384,32 @@ LidarImporter::readLASFile()
                         returnIndexPH.setPage(start);
                         returnCountPH.setPage(start);
                     }
+                    if (classIndexPH.isValid())
+                        classIndexPH.setPage(start);
+                    if (cflags_valid)
+                    {
+                        cflagSyntheticPH.setPage(start);
+                        cflagKeypointPH.setPage(start);
+                        cflagWithheldPH.setPage(start);
+                        cflagOverlapPH.setPage(start);
+                    }
+                    if (scannerchannelPH.isValid())
+                        scannerchannelPH.setPage(start);
+                    if (sflags_valid)
+                    {
+                        sflagDirectionPH.setPage(start);
+                        sflagEdgePH.setPage(start);
+                    }
+                    if (userDataPH.isValid())
+                        userDataPH.setPage(start);
+                    if (scanAnglePH.isValid())
+                        scanAnglePH.setPage(start);
+                    if (sourceIDPH.isValid())
+                        sourceIDPH.setPage(start);
                     if (timestampPH.isValid())
                         timestampPH.setPage(start);
+                    if (nearInfraredPH.isValid())
+                        nearInfraredPH.setPage(start);
 
                     // Determine the point number that we should be reading
                     int range = 0;
@@ -3072,19 +3446,53 @@ LidarImporter::readLASFile()
                             pread->getReturnNumber(returnIndexPH.value(ptoff));
                             pread->getReturnCount(returnCountPH.value(ptoff));
                         }
+                        if (classIndexPH.isValid())
+                            pread->getClassIndex(classIndexPH.value(ptoff));
+                        if (cflags_valid)
+                        {
+                            pread->getClassFlagSynthetic(cflagSyntheticPH.value(ptoff));
+                            pread->getClassFlagKeyPoint(cflagKeypointPH.value(ptoff));
+                            pread->getClassFlagWithheld(cflagWithheldPH.value(ptoff));
+                            pread->getClassFlagOverlap(cflagOverlapPH.value(ptoff));
+                        }
+                        if (scannerchannelPH.isValid())
+                            pread->getScannerChannel(scannerchannelPH.value(ptoff));
+                        if (sflags_valid)
+                        {
+                            pread->getScanDirectionFlag(
+                                    sflagDirectionPH.value(ptoff));
+                            pread->getEdgeFlightLineFlag(
+                                    sflagEdgePH.value(ptoff));
+                        }
+                        if (userDataPH.isValid())
+                            pread->getUserData(userDataPH.value(ptoff));
+                        if (scanAnglePH.isValid())
+                            pread->getScanAngle(scanAnglePH.value(ptoff));
+                        if (sourceIDPH.isValid())
+                            pread->getPointSourceID(sourceIDPH.value(ptoff));
                         if (timestampPH.isValid())
                             pread->getGPSTime(timestampPH.value(ptoff));
+                        if (nearInfraredPH.isValid())
+                            pread->getNIR(nearInfraredPH.value(ptoff));
                     }
                 }
             });
-
     for (int i = 0; i < ptreaders.size(); ++i)
         delete ptreaders(i);
 
     if (myBoss.wasInterrupted())
         return false;
 
-    return true;
+    bool result = true;
+    if (hasClassNameChanged() && myParms.getClassname())
+    {
+        result &= copyClassIndexToString(
+                myGdp->findPointAttribute("class_index"),
+                myGdp->findPointAttribute("class_name"));
+    }
+    if (delete_class_index)
+        myGdp->destroyPointAttrib("class_index");
+    return result;
 }
 
 //******************************************************************************
@@ -3333,7 +3741,7 @@ LidarImporter::readE57Scan(
         }
     }
 
-    // Set the scan nam attribute for the point range
+    // Set the scan name attribute for the point range
     if (hasPtNamesChanged())
     {
         if (myParms.getPtnames())
@@ -3579,7 +3987,7 @@ LidarImporter::readE57File()
                     UT_IntArray &scans_without_attrib
                             = missing_attrib_map[attrib];
 
-                    warning_msg.append("- ");
+                    warning_msg.append("\n- ");
                     warning_msg.append(attrib);
                     warning_msg.append(" in scan");
 
@@ -3594,8 +4002,6 @@ LidarImporter::readE57File()
                         if (j < nj - 1)
                             warning_msg.append(",");
                     }
-
-                    warning_msg.append('\n');
                 }
 
                 myCookparms.sopAddWarning(

@@ -72,6 +72,154 @@ Load:
         transform:
             The 4x4 matrix associated with the scan. This data only exists in E57 files.
 
+== Filtering ==
+
+Filter Type:
+    #id: filter_type
+    The type of filtering used on the point cloud.
+    
+    None:
+	    Do not apply any filtering.
+        
+    Range:
+	    Filter the point cloud by a specified range.
+        
+    Maximum:
+	    Filter the point cloud by setting a maximum number of points.
+
+    TIP:
+	    The node will be unable to cache its previous output if this parameter is changed. To avoid this, set this parameter before setting __File__.
+        
+Select ___ of ___:
+    #id: select_range
+    When __Filter Type__ is __Range__, every (number in the left field) points for every (number in the right field) points are read, for each scan in the file.
+
+    TIP:
+	    Try to keep these numbers small, as otherwise you may lose detail from the point cloud.
+    
+Max Number of Points:
+    #id: max_points
+    When __Filter Type__ is __Maximum__, do not read more points than the specified number. These points will be sampled from the entire file.
+
+Delete Invalid Points:
+    #id: delete_invalid
+    This option deletes every point in an "invalid group", and applies only to E57 files. Some E57 attributes (such as position) can come with associated data that marks certain points as having "invalid" values. In this case, an "invalid group" will be created that contains all "invalid" points for the attribute. 
+    
+    NOTE:
+	    Enabling this option will restrict the node's incremental reading capabilities, and can increase subsequent cook times.
+    
+== Attributes ==
+
+Several fields are common between the supported formats. Format-specific fields are grouped further below. Attributes are created and populated if the requested field is found in the __File__.
+
+Color:
+    #id: color
+    The origin of color data read from the file.
+    
+    None:
+	    Do not read any color data.
+        
+    From Point Cloud:
+	    Read color data stored with each point. When reading E57 files, an invalid group may be created.
+        
+    From Images:
+	    Read color data from the embedded images. Image-deriven color only exists for E57 files, and not for LAS or LAZ files.
+        
+Intensity:
+    #id: intensity
+    Include the intensity of the laser return. When reading E57 files, an invalid group may be created.
+
+Return Data:
+    #id: ret_data
+    Include the return index of the point, and the total number of returns that were recorded by the corresponding laser pulse. For E57 files, the return index begins at 0. For LAS/LAZ files, it begins at 1.
+
+Timestamp:
+    #id: timestamp
+    Include the time in which each point was recorded. When reading E57 files, an invalid group may be created.
+
+=== E57 ===
+
+Several E57 toggles are deprecated. It is recommended to use the __Scan Index__ and __Scan Name__ toggles instead of __Group Individual Scans__. To access rigid transforms and the scan name list, it is recommended import the file with __Load__ as __Info__.
+
+Surface Normals:
+    #id: normals
+    Include the surface normals.   
+
+Row and Column:
+    #id: row_col
+    Include the row and column indices, for scans that are organized into a grid.
+
+Scan Index:
+    #id: scanindex
+    Include the scan index that each point belongs to. 
+
+Scan Name:
+    #id: ptnames
+    Include the scan name that each point belongs to. If a scan name is not provided in the file, it is set to an empty string.
+
+Group Prefix:
+    #id: group_prefix
+    The prefix of the created groups and rigid transforms. This parameter is deprecated.
+    
+Group Individual Scans:
+    #id: scangroups
+    Group the points of each scan. Groups are named with the __Group Prefix__ parameter. This parameter is deprecated.
+
+Rigid Transforms:
+    #id: rigidtransforms
+    For E57 files, include the rigid transforms associated with each scan.
+    These are created as matrix4 detail attributes named "<prefix>transform1",
+    "<prefix>transform2", etc. where __<prefix>__ is the value specified in the
+    __Group Prefix__ parameter. This parameter is deprecated.
+    
+Scan Name List:
+    #id: scannames
+    For E57 files, create the string array global attribute, __scannames__,
+    that lists the names of the scans in the same order that the groups are
+    numbered. This parameter is deprecated.
+
+=== LAS and LAZ ===
+
+Some LAS attributes, noted below, are supported only by the newer point formats defined in version 1.4 of the LAS specification.
+
+LAS has numerous mandatory fields, which if unused, are filled with zeros. These fields include all but __Color__ (i.e. RGB) and __Near Infrared__ (i.e. NIR). __Timestamp__ (i.e. GPS Time) has become a mandatory field only for the LAS 1.4 standard point formats.
+
+Classification Index:
+    #id: classindex
+    Include the classification index.
+
+Classification Name:
+    #id: classname
+    Include the associated string for the class index. The strings follow the ASPRS LAS 1.4 Standard Point Classes with the following modifications: use underscores instead of spaces,  ignore all special characters, and ignore any hints surrounded by parentheses. Class values which fall outside of the standard definition are named "Class_<classindex>".
+
+Classification Flags:
+    #id: classflags
+    Include the LAS classification flags (synthetic, keypoint, withheld, overlap). The flags are stored as integer attributes, instead of groups. The overlap flag is only available in files that use LAS 1.4 standard point formats.
+
+Scanner Channel:
+    #id: scanchannel
+    Include the scanner channel field. This attribute is only available in files that use LAS 1.4 standard point formats.
+
+Scan Flags:
+    #id: scanflags
+    Include the scan flags (scan direction, edge of flight line). The flags are stored as integer attributes, instead of groups.
+
+User Data:
+    #id: userdata
+    Include the unsigned 8-bit integer field that is reserved for custom use.
+
+Scan Angle:
+    #id: scanangle
+    Include the scan angle field.
+
+Point Source ID:
+    #id: source_id
+    Include the point source id that each point belongs to.
+
+Near Infrared:
+    #id: nearinfrared
+    Include the near infrared field (i.e. NIR). This attribute is only available in files that use specific LAS 1.4 standard point formats.
+
 == Transform ==
 
 Transform Order:
@@ -130,114 +278,6 @@ Move Centroid to Origin:
 Move Pivot to Centroid:
     #id: movepivot
     Move the pivot to the centroid. The centroid is set as the bounding box center.
-
-== Filtering ==
-
-Filter Type:
-    #id: filter_type
-    The type of filtering used on the point cloud.
-    
-    None:
-	    Do not apply any filtering.
-        
-    Range:
-	    Filter the point cloud by a specified range.
-        
-    Maximum:
-	    Filter the point cloud by setting a maximum number of points.
-
-    TIP:
-	    The node will be unable to cache its previous output if this parameter is changed. To avoid this, set this parameter before setting __File__.
-        
-Select ___ of ___:
-    #id: select_range
-    When __Filter Type__ is __Range__, every (number in the left field) points for every (number in the right field) points are read, for each scan in the file.
-
-    TIP:
-	    Try to keep these numbers small, as otherwise you may lose detail from the point cloud.
-    
-Max Number of Points:
-    #id: max_points
-    When __Filter Type__ is __Maximum__, do not read more points than the specified number. These points will be sampled from the entire file.
-
-Delete Invalid Points:
-    #id: delete_invalid
-    Deletes every point in an "invalid group". Applies to E57 files only.
-    
-    NOTE:
-	    Enabling this option will restrict the node's incremental reading capabilities, and can significantly increase subsequent cook times.
-    
-== Attributes ==
-
-In E57 files, some attributes (such as position) may come with associated data that marks certain points as having "invalid" values. In these cases, an "invalid group" will be created that contains all "invalid" points for that attribute. These points can be deleted with the __Delete Invalid Points__ option.
-
-Color:
-    #id: color
-    The origin of color data read from the file.
-    
-    None:
-	    Do not read any color data.
-        
-    From Point Cloud:
-	    Read color data from the point scans. When reading E57 files, an invalid group may be created.
-        
-    From Images:
-	    Read color data from the embedded images. Image-deriven color only exists for E57 files, and not for LAS or LAZ files.
-        
-Intensity:
-    #id: intensity
-    Include the intensity of the laser pulse that brought the point data.
-    When reading E57 files, an invalid group may be created.
-    
-Row and Column:
-    #id: row_col
-    Include the row and column indices of the point cloud, if it is also represented in the file as a grid. This data only exists in E57 files.
-    
-Return Data:
-    #id: ret_data
-    Include the return index and the number of returns of the laser pulse that brought the point data.
-    
-Timestamp:
-    #id: timestamp
-    Include the timestamps for when the laser pulse brought each point to the scanner. When reading E57 files, an invalid group may be created.
-    
-Surface Normals:
-    #id: normals
-    Include the surface normals of the points. This data only exists in E57 files.
-
-Scan Index:
-    #id: scannindex
-    Include the scan index that a point belongs to. This data only exists in E57 files.
-
-Scan Name:
-    #id: scanname
-    Include the scan name that a point belongs to. This data only exists in E57 files.
-
-== Scan Info (deprecated) ==
-
-Several toggles are deprecated, all of which are specific to the E57 format. It is recommended to use the __Scan Index__ and __Scan Name__ toggles instead of __Group Individual Scans__. To access rigid transforms and the scan name list, it is recommended import the file with __Load__ as __Info__.
-
-Group Prefix:
-    #id: group_prefix
-    The prefix of the created groups and rigid transforms.
-    
-Group Individual Scans:
-    #id: scangroups
-    Group the points of each scan. Groups are named with the __Group Prefix__ parameter.
-
-Rigid Transforms:
-    #id: rigidtransforms
-    For E57 files, include the rigid transforms associated with each scan.
-    These are created as matrix4 detail attributes named "<prefix>transform1",
-    "<prefix>transform2", etc. where __<prefix>__ is the value specified in the
-    __Group Prefix__ parameter.
-    
-Scan Name List:
-    #id: scannames
-    For E57 files, create the string array global attribute, __scannames__,
-    that lists the names of the scans in the same order that the groups are
-    numbered. Not all scans have names; if a name is missing, then its
-    corresponding value in the array will be the empty string.
 
 @related
 
