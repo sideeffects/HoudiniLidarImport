@@ -1790,8 +1790,8 @@ public:
     size_t getImageSize(int idx) const;
     bool hasValidProjectionType(int idx) const;
 
-    UT_StringHolder getScanGroupGuid(int idx);
-    UT_StringHolder getImageAssociatedScanGuid(int idx);
+    const UT_StringHolder &getScanGroupGuid(int idx) const;
+    const UT_StringHolder &getImageAssociatedScanGuid(int idx) const;
 
     void computePointProjection(int idx, const UT_Vector4D pos, 
 	    exint &img_x, exint &img_y) const;
@@ -2353,14 +2353,14 @@ E57Reader::hasValidProjectionType(int idx) const
     return myImages(idx).myProjectionType > e57::Image2DProjection::E57_VISUAL;
 }
 
-UT_StringHolder
-E57Reader::getScanGroupGuid(int idx)
+const UT_StringHolder &
+E57Reader::getScanGroupGuid(int idx) const
 {
     return myScans(idx).myGuid;
 }
 
-UT_StringHolder
-E57Reader::getImageAssociatedScanGuid(int idx)
+const UT_StringHolder &
+E57Reader::getImageAssociatedScanGuid(int idx) const
 {
     return myImages(idx).myAssociatedScanGuid;
 }
@@ -2553,7 +2553,7 @@ private:
     void warnE57MissingAttribs(const E57Reader &reader);
     bool readE57Scan(E57Reader &reader, int scan_index, int64 &pt_idx);
     bool readE57File();
-    bool updateE57ColorFromImages(int image_index, E57Reader &reader);
+    bool updateE57ColorFromImages(E57Reader &reader);
 
     template <typename Body>
     void forAllPoints(const Body &body);
@@ -3506,6 +3506,18 @@ LidarImporter::warnE57MissingAttribs(const E57Reader& reader)
     {
         if (myParms.getColor() == Color::FROM_PTCLOUD && !reader.hasColor(i))
             scanmap["Color"].append(i);
+        else if (myParms.getColor() == Color::FROM_IMAGES)
+        {
+            bool has_images = false;
+            UT_StringRef guid = reader.getScanGroupGuid(i);
+            for (int j = 0; j < reader.getNumImages(); ++j)
+            {
+                if (reader.getImageAssociatedScanGuid(j) == guid)
+                    has_images = true;
+            }
+            if (!has_images)
+                scanmap["Color"].append(i);
+        }
 
         if (myParms.getIntensity() && !reader.hasIntensity(i))
             scanmap["Intensity"].append(i);
@@ -3597,23 +3609,25 @@ LidarImporter::readE57Scan(
         }
     }
 
-    if (hasColorChanged() && myParms.getColor() == Color::FROM_PTCLOUD
-        && reader.hasColor(scan_index))
-    {
-        pt_reader_builder.color();
-        read_file_required = true;
-
-        if (reader.hasColorInvalid(scan_index))
-            pt_reader_builder.colorInvalid();
-    }
-    else if (hasColorChanged()
-            && myParms.getColor() != Color::FROM_PTCLOUD)
+    if (hasColorChanged())
     {
         myGdp->destroyDiffuseAttribute(GA_ATTRIB_POINT);
+        if (myParms.getColor() == Color::FROM_PTCLOUD
+            && reader.hasColor(scan_index))
+        {
+            pt_reader_builder.color();
+            read_file_required = true;
 
-        GA_PointGroup *invalid_group = myGdp->findPointGroup("e57_invalid_color");
-        if (invalid_group)
-            myGdp->destroyPointGroup(invalid_group);
+            if (reader.hasColorInvalid(scan_index))
+                pt_reader_builder.colorInvalid();
+        }
+        else if (myParms.getColor() != Color::FROM_PTCLOUD)
+        {
+            GA_PointGroup *invalid_group
+                    = myGdp->findPointGroup("e57_invalid_color");
+            if (invalid_group)
+                myGdp->destroyPointGroup(invalid_group);
+        }
     }
 
     if (hasIntensityChanged() && myParms.getIntensity()
@@ -3784,7 +3798,7 @@ LidarImporter::readE57Scan(
             myGdp->destroyPointGroup(old_group_name.buffer());
         }
     }
-    else if (hasGroupPrefixChanged())
+    else if (myParms.getScangroups() && hasGroupPrefixChanged())
     {
         myGdp->destroyPointGroup(old_group_name.buffer());
         myGdp->newPointGroup(group_name.buffer());
@@ -3835,66 +3849,74 @@ LidarImporter::readE57Scan(
 }
 
 bool
-LidarImporter::updateE57ColorFromImages(
-        int image_index,
-        E57Reader &reader)
+LidarImporter::updateE57ColorFromImages(E57Reader &reader)
 {
-    UT_Matrix4D rigid_body_transform_inv(reader.getImageRBXForm(image_index));
-    rigid_body_transform_inv.invert();
-
-    UT_UniquePtr<unsigned char[]> image_buffer = reader.getImageBuffer(
-            image_index, false);
-
-    if (!image_buffer)
-        return true;
-
-    size_t image_size = reader.getImageSize(image_index);
-
-    UT_IStream is((char *)image_buffer.get(), image_size, UT_ISTREAM_BINARY);
-
-    UT_UniquePtr<IMG_File> img_file(IMG_File::open(is));
-
-    UT_Array<PXL_Raster *> rasters;
-    img_file->readImages(rasters);
-
-    img_file->close();
-
     GA_Attribute *ncolors_attrib = myGdp->addIntTuple(
             GA_ATTRIB_POINT, GA_SCOPE_PRIVATE, "__num_colors__", 1);
     GA_Attribute *color_attrib = myGdp->addDiffuseAttribute(GA_ATTRIB_POINT);
 
-    GA_RWHandleV3 color_h(color_attrib);
-    GA_RWHandleI num_colors_h(ncolors_attrib);
-
-    UT_StringHolder group_name(reader.getImageAssociatedScanGuid(image_index));
-    const UT_IntArray &scan_groups = myCache->getScanGroupMap().at(group_name);
-
-    GA_PointGroup image_ptgroup(*myGdp);
-    for (int i = 0, ni = scan_groups.entries(); i < ni; ++i)
+    GA_Offset start = myGdp->pointOffset(0);
+    GA_Offset end;
+    for (int i = 0; i < reader.getNumScans(); ++i)
     {
-        int scan_index = scan_groups(i);
+        // Compute the range of the scan.
+        int range_good, range_size;
+        computeRange(
+                range_good, range_size, reader.getPointsInFile(),
+                reader.getPointsInScan(i));
 
-        GA_PointGroup *scan_group = nullptr;
-        UT_WorkBuffer scan_group_name(myParms.getGroup_prefix().c_str());
-        scan_group_name.appendFormat("{}", scan_index + 1);
-        scan_group = myGdp->findPointGroup(scan_group_name.buffer());
+        exint increment = reader.getPointsInScan(i);
+        if (isRangeValid(range_good, range_size))
+        {
+            increment = range_good
+                        * (reader.getPointsInScan(i) / range_size);
+            exint remaining_pts = reader.getPointsInFile() % range_size;
+            increment += SYSmin(range_good, remaining_pts);
+        }
+        end = start + increment;
 
-        image_ptgroup |= *scan_group;
+        // Project images with matching guid's onto the current scan.
+        UT_StringRef guid = reader.getScanGroupGuid(i);
+        for (int j = 0; j < reader.getNumImages(); ++j)
+        {
+            if (reader.getImageAssociatedScanGuid(j) != guid)
+                continue;
+
+            UT_UniquePtr<unsigned char[]> image_buffer = reader.getImageBuffer(
+                    j, false);
+            if (!image_buffer)
+                continue;
+
+            size_t image_size = reader.getImageSize(j);
+            UT_IStream is(
+                    (char *)image_buffer.get(), image_size, UT_ISTREAM_BINARY);
+
+            UT_UniquePtr<IMG_File> img_file(IMG_File::open(is));
+
+            UT_Array<PXL_Raster *> rasters;
+            img_file->readImages(rasters);
+            img_file->close();
+
+            UT_Matrix4D rigid_body_transform_inv(reader.getImageRBXForm(j));
+            rigid_body_transform_inv.invert();
+            UTparallelFor(
+                    GA_SplittableRange(
+                            GA_Range(myGdp->getPointMap(), start, end)),
+                    E57ColorFromImage(
+                            *myCache, *color_attrib, *ncolors_attrib,
+                            *rasters(0), reader, j, rigid_body_transform_inv));
+
+            for (int i = 0, ni = rasters.entries(); i < ni; ++i)
+                delete rasters(i);
+
+            if (myBoss.wasInterrupted())
+                return false;
+        }
+
+        start += increment;
     }
 
-    GA_Range group_range(image_ptgroup);
-    UTparallelFor(
-            GA_SplittableRange(group_range),
-            E57ColorFromImage(
-                    *myCache, *color_attrib, *ncolors_attrib, *rasters(0), reader,
-                    image_index, rigid_body_transform_inv));
-
-    if (myBoss.wasInterrupted())
-        return false;
-
-    for (int i = 0, ni = rasters.entries(); i < ni; ++i)
-        delete rasters(i);
-
+    myGdp->destroyPointAttrib(GA_SCOPE_PRIVATE, "__num_colors__");
     return true;
 }
 
@@ -3909,7 +3931,16 @@ LidarImporter::readE57File()
             warnE57MissingAttribs(reader);
 
             if (!isReadPointsRequired())
+            {
+                if (hasColorChanged()
+                    && (myParms.getColor() == Color::FROM_IMAGES)
+                    && (reader.getNumImages() > 0))
+                {
+                    updateE57ColorFromImages(reader);
+                }
+
                 return true;
+            }
 
             // Cache the total bounding box of all E57 scans
             myCache->setFileBBox(reader.getFileBoundingBox());
@@ -3966,19 +3997,10 @@ LidarImporter::readE57File()
                     return false;
             }
 
-            if (hasColorChanged()
-                && myParms.getColor() == Color::FROM_IMAGES)
+            if (hasColorChanged() && (myParms.getColor() == Color::FROM_IMAGES)
+                && (reader.getNumImages() > 0))
             {
-                int num_images = reader.getNumImages();
-
-                for (int i = 0; i < num_images; ++i)
-                {
-                    if (!updateE57ColorFromImages(i, reader))
-                        return false;
-                }
-
-                // Delete internal attribute once everything's done
-                myGdp->destroyPointAttrib(GA_SCOPE_PRIVATE, "__num_colors__");
+                updateE57ColorFromImages(reader);
             }
 
             if (myParms.getDelete_invalid())
