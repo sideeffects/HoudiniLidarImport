@@ -3011,7 +3011,7 @@ LidarImporter::copyClassIndexToString(GA_Attribute *indexattrib, GA_Attribute *s
     if (!stuple)
         return false;
 
-    UT_IntArray handlemap(UINT8_MAX, UINT8_MAX);
+    UT_IntArray handlemap(UINT8_MAX + 1, UINT8_MAX + 1);
     GA_AIFSharedStringTuple::StringBuffer stringbuf(stringattrib, stuple);
 
     int i;
