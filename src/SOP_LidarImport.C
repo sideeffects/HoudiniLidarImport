@@ -3011,7 +3011,7 @@ LidarImporter::copyClassIndexToString(GA_Attribute *indexattrib, GA_Attribute *s
     if (!stuple)
         return false;
 
-    UT_IntArray handlemap(UINT8_MAX, UINT8_MAX);
+    UT_IntArray handlemap(UINT8_MAX + 1, UINT8_MAX + 1);
     GA_AIFSharedStringTuple::StringBuffer stringbuf(stringattrib, stuple);
 
     int i;
@@ -3049,23 +3049,20 @@ LidarImporter::readLASFile()
     using namespace SOP_LidarImportEnums;
 
 
-    LASReader *reader = new LASReader(myParms.getFilename().c_str());
-    if (!reader->isValid())
-    {
-        delete reader;
+    LASReader reader(myParms.getFilename().c_str());
+    if (!reader.isValid())
         return false;
-    }
 
-    warnLASMissingAttribs(*reader);
+    warnLASMissingAttribs(reader);
     if (!isReadPointsRequired())
         return true;
 
     // Scrape metadata
-    UT_BoundingBoxD box = reader->getBoundingBox();
+    UT_BoundingBoxD box = reader.getBoundingBox();
     myCache->setFileBBox(box);
 
     // Configure the number of points to be read from filter parms
-    exint pts_in_file = reader->getPointCount();
+    exint pts_in_file = reader.getPointCount();
     int range_good, range_size;
     computeRange(range_good, range_size, pts_in_file);
 
@@ -3092,7 +3089,7 @@ LidarImporter::readLASFile()
     // Add / remove requested attributes
     if (hasColorChanged())
     {
-        if (myParms.getColor() == Color::FROM_PTCLOUD && reader->hasRGB())
+        if (myParms.getColor() == Color::FROM_PTCLOUD && reader.hasRGB())
         {
             myGdp->addDiffuseAttribute(GA_ATTRIB_POINT);
             read_required = true;
@@ -3169,7 +3166,7 @@ LidarImporter::readLASFile()
             myGdp->addTuple(
                     GA_STORE_UINT8, GA_ATTRIB_POINT, "classflag_withheld", 1);
 			
-	    if (reader->hasClassFlagOverlap())
+	    if (reader.hasClassFlagOverlap())
                 myGdp->addTuple(
                         GA_STORE_UINT8, GA_ATTRIB_POINT, "classflag_overlap", 1);
 
@@ -3185,7 +3182,7 @@ LidarImporter::readLASFile()
     }
     if (hasScannerChannelChanged())
     {
-        if (myParms.getScannerchannel() && reader->hasScannerChannel())
+        if (myParms.getScannerchannel() && reader.hasScannerChannel())
         {
             myGdp->addTuple(GA_STORE_UINT8, GA_ATTRIB_POINT, "scanner_channel", 1);
             read_required = true;
@@ -3241,7 +3238,7 @@ LidarImporter::readLASFile()
     }
     if (hasTimestampChanged())
     {
-        if (myParms.getTimestamp() && reader->hasGPSTime())
+        if (myParms.getTimestamp() && reader.hasGPSTime())
         {
             myGdp->addFloatTuple(
                     GA_ATTRIB_POINT, "timestamp", 1, GA_Defaults(), nullptr,
@@ -3253,7 +3250,7 @@ LidarImporter::readLASFile()
     }
     if (hasNearInfraredChanged())
     {
-        if (myParms.getNearinfrared() && reader->hasNIR())
+        if (myParms.getNearinfrared() && reader.hasNIR())
         {
             myGdp->addFloatTuple(GA_ATTRIB_POINT, "near_infrared", 1);
             read_required = true;
@@ -3265,7 +3262,6 @@ LidarImporter::readLASFile()
     // Stop if no new attributes need to be read.
     if (!read_required || !num_pts)
     {
-        delete reader;
         bool result = true;
         if (hasClassNameChanged() && myParms.getClassname())
         {
@@ -3286,17 +3282,17 @@ LidarImporter::readLASFile()
     int num_readers = SYSmin(num_pages, UT_Thread::getNumProcessors());
 
     UT_Array<LASReader *> ptreaders(num_readers);
-    ptreaders.append(reader);
+    ptreaders.append(&reader);
     for (int i = 1; i < num_readers; ++i)
     {
-        ptreaders.append(new LASReader(myParms.getFilename().c_str()));
+	LASReader *r = new LASReader(myParms.getFilename().c_str());
+	if (!r->isValid())
+	{
+	    delete r;
+	    break;
+	}
 
-        if (!ptreaders.last()->isValid())
-        {
-            delete ptreaders.last();
-            ptreaders.removeLast();
-            break;
-        }
+        ptreaders.append(r);
     }
 
     GA_Attribute *position(myCache->getDetachedPosition());
@@ -3474,7 +3470,7 @@ LidarImporter::readLASFile()
                     }
                 }
             });
-    for (int i = 0; i < ptreaders.size(); ++i)
+    for (int i = 1; i < ptreaders.size(); ++i)
         delete ptreaders(i);
 
     if (myBoss.wasInterrupted())
