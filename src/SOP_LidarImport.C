@@ -50,6 +50,7 @@
 #include <UT/UT_Interrupt.h>
 #include <UT/UT_IStream.h>
 #include <UT/UT_Matrix4.h>
+#include <UT/UT_PathSearch.h>
 #include <UT/UT_Quaternion.h>
 #include <UT/UT_String.h>
 #include <UT/UT_UndoManager.h>
@@ -847,7 +848,12 @@ LASReader::LASReader(const char *filename)
         return;
     }
 
-    if (laszip_open_reader(myReader, filename, &myIsCompressed))
+    // complete a path search in case it is in the geometry path
+    UT_String realname;
+    UT_PathSearch::getInstance(UT_HOUDINI_GEOMETRY_PATH)->
+		findFile(realname, filename);
+
+    if (laszip_open_reader(myReader, realname.c_str(), &myIsCompressed))
     {
         UTdebugPrint("LASzip failed: laszip_open_reader_stream");
         destroyReader();
@@ -1823,7 +1829,7 @@ public:
     bool hasNormals(int idx) const
     { return myScans(idx).myAvailableAttribs.myHasNormals; }
 private:
-    e57::ImageFile myFileHandle;
+    UT_UniquePtr<e57::ImageFile> myFileHandle;
 
     UT_Array<sop_ScanInfo> myScans;
     UT_Array<sop_ImageInfo> myImages;
@@ -1833,10 +1839,16 @@ private:
 };
 
 E57Reader::E57Reader(const char *filename)
-    : myFileHandle(filename, "r")
 {
+    // complete a path search in case it is in the geometry path
+    UT_String realname;
+    UT_PathSearch::getInstance(UT_HOUDINI_GEOMETRY_PATH)->
+		findFile(realname, filename);
+
+    myFileHandle.reset(new e57::ImageFile(realname.c_str(), "r"));
+
     // NOTE: some of this code may throw an exception; it should be caught in cookMySop
-    e57::StructureNode root_node = myFileHandle.root();
+    e57::StructureNode root_node = myFileHandle->root();
     e57::VectorNode scan_root_node(root_node.get("/data3D"));
 
     auto set_rbxform = [](e57::StructureNode &parent, UT_Matrix4D &rbxform)
@@ -2274,7 +2286,7 @@ sop_E57PointReader::Builder
 E57Reader::createPointReaderBuilder(int idx, GU_Detail *gdp, SOP_LidarImportCache *cache,
 						  int range_good, int range_size)
 {
-    return sop_E57PointReader::Builder(myFileHandle, idx, myScans(idx), gdp, cache,
+    return sop_E57PointReader::Builder(*myFileHandle, idx, myScans(idx), gdp, cache,
 				       range_good, range_size);
 }
 
@@ -2310,7 +2322,7 @@ E57Reader::getImageBuffer(int idx, bool read_ref_images) const
 	}
     };
 
-    e57::VectorNode image_root_node(myFileHandle.root().get("/images2D"));
+    e57::VectorNode image_root_node(myFileHandle->root().get("/images2D"));
     e57::StructureNode image_node(image_root_node.get(idx));
     if (image.myProjectionType == e57::Image2DProjection::E57_PINHOLE)
     {
