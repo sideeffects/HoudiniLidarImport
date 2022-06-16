@@ -42,6 +42,11 @@ public:
     static void              installSOP(OP_OperatorTable *table);
 
     // Callbacks
+        static int           reloadGeometryCB(
+                                                void *data,
+                                                int index,
+                                                fpreal now,
+                                                const PRM_Template *);
     static int               moveCentroidToOriginCB(
                                                 void *data,
                                                 int index,
