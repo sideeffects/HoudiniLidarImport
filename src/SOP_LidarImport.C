@@ -812,13 +812,13 @@ public:
     // Flags are read into uint8 attributes, instead of groups.
     SYS_FORCE_INLINE void getReturnNumber(uint8 &in) const;
     SYS_FORCE_INLINE void getReturnCount(uint8 &in) const;
-    SYS_FORCE_INLINE void getClassFlagSynthetic(uint8 &in) const;
-    SYS_FORCE_INLINE void getClassFlagKeyPoint(uint8 &in) const;
-    SYS_FORCE_INLINE void getClassFlagWithheld(uint8 &in) const;
-    SYS_FORCE_INLINE void getClassFlagOverlap(uint8 &in) const;
-    SYS_FORCE_INLINE void getScannerChannel(uint8 &in) const;
-    SYS_FORCE_INLINE void getScanDirectionFlag(uint8 &in) const;
-    SYS_FORCE_INLINE void getEdgeFlightLineFlag(uint8 &in) const;
+    SYS_FORCE_INLINE void getClassFlagSynthetic(int8 &in) const;
+    SYS_FORCE_INLINE void getClassFlagKeyPoint(int8 &in) const;
+    SYS_FORCE_INLINE void getClassFlagWithheld(int8 &in) const;
+    SYS_FORCE_INLINE void getClassFlagOverlap(int8 &in) const;
+    SYS_FORCE_INLINE void getScannerChannel(int8 &in) const;
+    SYS_FORCE_INLINE void getScanDirectionFlag(int8 &in) const;
+    SYS_FORCE_INLINE void getEdgeFlightLineFlag(int8 &in) const;
     SYS_FORCE_INLINE void getClassIndex(uint8 &in) const;
     SYS_FORCE_INLINE void getScanAngle(fpreal32 &in) const;
 
@@ -1022,7 +1022,7 @@ LASReader::getReturnCount(uint8 &in) const
 }
 
 void
-LASReader::getClassFlagSynthetic(uint8 &in) const
+LASReader::getClassFlagSynthetic(int8 &in) const
 {
     if (myPointFormat > 5)
         in = myPoint->extended_classification_flags & 0x1;
@@ -1031,7 +1031,7 @@ LASReader::getClassFlagSynthetic(uint8 &in) const
 }
 
 void
-LASReader::getClassFlagKeyPoint(uint8 &in) const
+LASReader::getClassFlagKeyPoint(int8 &in) const
 {
     if (myPointFormat > 5)
         in = (myPoint->extended_classification_flags & 0x2) >> 1;
@@ -1040,7 +1040,7 @@ LASReader::getClassFlagKeyPoint(uint8 &in) const
 }
 
 void
-LASReader::getClassFlagWithheld(uint8 &in) const
+LASReader::getClassFlagWithheld(int8 &in) const
 {
     if (myPointFormat > 5)
         in = (myPoint->extended_classification_flags & 0x4) >> 2;
@@ -1049,25 +1049,25 @@ LASReader::getClassFlagWithheld(uint8 &in) const
 }
 
 void
-LASReader::getClassFlagOverlap(uint8 &in) const
+LASReader::getClassFlagOverlap(int8 &in) const
 {
     in = (myPoint->extended_classification_flags & 0x8) >> 3;
 }
 
 void
-LASReader::getScannerChannel(uint8 &in) const
+LASReader::getScannerChannel(int8 &in) const
 {
     in = myPoint->extended_scanner_channel;
 }
 
 void
-LASReader::getScanDirectionFlag(uint8 &in) const
+LASReader::getScanDirectionFlag(int8 &in) const
 {
     in = myPoint->scan_direction_flag;
 }
 
 void
-LASReader::getEdgeFlightLineFlag(uint8 &in) const
+LASReader::getEdgeFlightLineFlag(int8 &in) const
 {
     in = myPoint->edge_of_flight_line;
 }
@@ -3150,7 +3150,7 @@ LidarImporter::readLASFile()
         {
             myGdp->addIntTuple(
                     GA_ATTRIB_POINT, "class_index", 1, GA_Defaults(), nullptr,
-                    nullptr, GA_STORE_UINT8);
+                    nullptr, GA_STORE_INT16);
             read_required = true;
         }
         else if (!(hasClassNameChanged() && myParms.getClassname()))
@@ -3167,7 +3167,7 @@ LidarImporter::readLASFile()
             {
                 myGdp->addIntTuple(
                         GA_ATTRIB_POINT, "class_index", 1, GA_Defaults(),
-                        nullptr, nullptr, GA_STORE_UINT8);
+                        nullptr, nullptr, GA_STORE_INT16);
                 delete_class_index = true;
                 read_required = true;
             }
@@ -3180,15 +3180,15 @@ LidarImporter::readLASFile()
         if (myParms.getClassflags())
         {
             myGdp->addTuple(
-                    GA_STORE_UINT8, GA_ATTRIB_POINT, "classflag_synthetic", 1);
+                    GA_STORE_INT8, GA_ATTRIB_POINT, "classflag_synthetic", 1);
             myGdp->addTuple(
-                    GA_STORE_UINT8, GA_ATTRIB_POINT, "classflag_keypoint", 1);
+                    GA_STORE_INT8, GA_ATTRIB_POINT, "classflag_keypoint", 1);
             myGdp->addTuple(
-                    GA_STORE_UINT8, GA_ATTRIB_POINT, "classflag_withheld", 1);
+                    GA_STORE_INT8, GA_ATTRIB_POINT, "classflag_withheld", 1);
 			
 	    if (reader.hasClassFlagOverlap())
                 myGdp->addTuple(
-                        GA_STORE_UINT8, GA_ATTRIB_POINT, "classflag_overlap", 1);
+                        GA_STORE_INT8, GA_ATTRIB_POINT, "classflag_overlap", 1);
 
             read_required = true;
         }
@@ -3204,7 +3204,7 @@ LidarImporter::readLASFile()
     {
         if (myParms.getScannerchannel() && reader.hasScannerChannel())
         {
-            myGdp->addTuple(GA_STORE_UINT8, GA_ATTRIB_POINT, "scanner_channel", 1);
+            myGdp->addTuple(GA_STORE_INT8, GA_ATTRIB_POINT, "scanner_channel", 1);
             read_required = true;
         }
         else
@@ -3215,9 +3215,9 @@ LidarImporter::readLASFile()
         if (myParms.getScanflags())
         {
             myGdp->addTuple(
-                    GA_STORE_UINT8, GA_ATTRIB_POINT, "scanflag_direction", 1);
+                    GA_STORE_INT8, GA_ATTRIB_POINT, "scanflag_direction", 1);
             myGdp->addTuple(
-                    GA_STORE_UINT8, GA_ATTRIB_POINT, "scanflag_edge", 1);
+                    GA_STORE_INT8, GA_ATTRIB_POINT, "scanflag_edge", 1);
             read_required = true;
         }
         else
@@ -3230,7 +3230,7 @@ LidarImporter::readLASFile()
     {
         if (myParms.getUserdata())
         {
-            myGdp->addTuple(GA_STORE_UINT8, GA_ATTRIB_POINT, "user_data", 1);
+            myGdp->addTuple(GA_STORE_INT16, GA_ATTRIB_POINT, "user_data", 1);
             read_required = true;
         }
         else
@@ -3348,13 +3348,13 @@ LidarImporter::readLASFile()
                 GA_PageHandleScalar<uint8>::RWType returnIndexPH(returnIndex);
                 GA_PageHandleScalar<uint8>::RWType returnCountPH(returnCount);
                 GA_PageHandleScalar<uint8>::RWType classIndexPH(classIndex);
-                GA_PageHandleScalar<uint8>::RWType cflagSyntheticPH(cflagSynthetic);
-                GA_PageHandleScalar<uint8>::RWType cflagKeypointPH(cflagKeypoint);
-                GA_PageHandleScalar<uint8>::RWType cflagWithheldPH(cflagWithheld);
-                GA_PageHandleScalar<uint8>::RWType cflagOverlapPH(cflagOverlap);
-                GA_PageHandleScalar<uint8>::RWType scannerchannelPH(scannerchannel);
-                GA_PageHandleScalar<uint8>::RWType sflagDirectionPH(sflagDirection);
-                GA_PageHandleScalar<uint8>::RWType sflagEdgePH(sflagEdge);
+                GA_PageHandleScalar<int8>::RWType cflagSyntheticPH(cflagSynthetic);
+                GA_PageHandleScalar<int8>::RWType cflagKeypointPH(cflagKeypoint);
+                GA_PageHandleScalar<int8>::RWType cflagWithheldPH(cflagWithheld);
+                GA_PageHandleScalar<int8>::RWType cflagOverlapPH(cflagOverlap);
+                GA_PageHandleScalar<int8>::RWType scannerchannelPH(scannerchannel);
+                GA_PageHandleScalar<int8>::RWType sflagDirectionPH(sflagDirection);
+                GA_PageHandleScalar<int8>::RWType sflagEdgePH(sflagEdge);
                 GA_PageHandleScalar<uint8>::RWType userDataPH(userData);
                 GA_RWPageHandleF scanAnglePH(scanAngle);
                 GA_RWPageHandleI sourceIDPH(sourceID);
