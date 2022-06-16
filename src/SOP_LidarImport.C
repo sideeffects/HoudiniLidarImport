@@ -80,6 +80,12 @@ static const char *theDsFile = R"THEDSFILE(
 	parmtag { "filechooser_mode" "read" }
     }
     parm {
+        name    "reload"
+        label   "Reload Geometry"
+        type    button
+        default { "0" }
+    }
+    parm {
         name    "precision"
         label   "Precision"
         type    string
@@ -642,6 +648,8 @@ SOP_LidarImport::buildTemplates()
     static PRM_TemplateBuilder templ("SOP_LidarImport.C"_sh, theDsFile);
     if (templ.justBuilt())
     {
+        templ.setCallback("reload", &reloadGeometryCB);
+
         templ.setNoCook("centroid", true);
         templ.setCallback("movecentroid", &moveCentroidToOriginCB);
         templ.setCallback("movepivot", &movePivotToCentroidCB);
@@ -4805,6 +4813,26 @@ SOP_LidarImport::movePivotToCentroid(fpreal now)
     blockModify(false);
 
     return true;
+}
+
+int
+SOP_LidarImport::reloadGeometryCB(
+        void *data,
+        int,
+        fpreal t,
+        const PRM_Template *)
+{
+    SOP_LidarImport *op = static_cast<SOP_LidarImport *>(data);
+
+    if (!op->getHardLock())
+    {
+        if (op->myNodeVerbCache)
+            static_cast<SOP_LidarImportCache *>(op->myNodeVerbCache)->clearCache();
+
+        op->forceRecook();
+    }
+
+    return 1;
 }
 
 int

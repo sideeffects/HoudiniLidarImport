@@ -38,6 +38,10 @@ File:
     #id: filename
     The name of the lidar file.
 
+Reload Geometry:
+    #id: reload
+    Force a reload of the file.
+
 Precision:
     #id: precision
     The storage type for the positions. See [available types|#types] above.
