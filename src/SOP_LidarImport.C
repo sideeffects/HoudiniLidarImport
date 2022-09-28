@@ -64,6 +64,8 @@
 #include "SOP_LidarImport.h"
 #include "SOP_LidarImport.proto.h"
 
+using namespace UT::Literal;
+
 //#define E57_SOP_VERBOSE
 
 static const char *theDsFile = R"THEDSFILE(
