@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022
+ * Copyright (c) 2023
  *	Side Effects Software Inc.  All rights reserved.
  *
  * Redistribution and use of Houdini Development Kit samples in source and
@@ -24,6 +24,9 @@
  *
  *----------------------------------------------------------------------------
  */
+
+#include "SOP_LidarImport.h"
+#include "SOP_LidarImport.proto.h"
 
 #include <E57/E57Foundation.h>
 #include <E57/E57Simple.h>
@@ -60,9 +63,6 @@
 #include <vector>
 #include <functional>
 #include <exception>
-
-#include "SOP_LidarImport.h"
-#include "SOP_LidarImport.proto.h"
 
 using namespace UT::Literal;
 
