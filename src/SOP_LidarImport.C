@@ -3911,7 +3911,7 @@ LidarImporter::updateE57ColorFromImages(E57Reader &reader)
 
             UT_UniquePtr<IMG_File> img_file(IMG_File::open(is));
 
-            UT_Array<PXL_Raster *> rasters;
+            UT_Array<UT_UniquePtr<PXL_Raster>> rasters;
             img_file->readImages(rasters);
             img_file->close();
 
@@ -3923,9 +3923,6 @@ LidarImporter::updateE57ColorFromImages(E57Reader &reader)
                     E57ColorFromImage(
                             *myCache, *color_attrib, *ncolors_attrib,
                             *rasters(0), reader, j, rigid_body_transform_inv));
-
-            for (int i = 0, ni = rasters.entries(); i < ni; ++i)
-                delete rasters(i);
 
             if (myBoss.wasInterrupted())
                 return false;
