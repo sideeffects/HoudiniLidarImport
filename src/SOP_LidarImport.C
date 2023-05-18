@@ -3629,7 +3629,9 @@ LidarImporter::readE57Scan(
 
     if (hasColorChanged())
     {
-        myGdp->destroyDiffuseAttribute(GA_ATTRIB_POINT);
+        if (scan_index == 0)
+            myGdp->destroyDiffuseAttribute(GA_ATTRIB_POINT);
+
         if (myParms.getColor() == Color::FROM_PTCLOUD
             && reader.hasColor(scan_index))
         {
