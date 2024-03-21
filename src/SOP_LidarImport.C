@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023
+ * Copyright (c) 2024
  *	Side Effects Software Inc.  All rights reserved.
  *
  * Redistribution and use of Houdini Development Kit samples in source and
@@ -516,6 +516,7 @@ groupsimple {
 SOP_LidarImport::SOP_LidarImport(OP_Network *net, const char *name, OP_Operator *op)
     : SOP_Node(net, name, op)
 {
+    mySopFlags.setManagesDataIDs(true);
 }
 
 SOP_LidarImport::~SOP_LidarImport() {}
@@ -4575,6 +4576,7 @@ SOP_LidarImportVerb::cook(const SOP_NodeVerb::CookParms &cookparms) const
 {
     LidarImporter importer(cookparms);
     importer.import();
+    cookparms.gdh().gdpNC()->bumpAllDataIds();
 }
 
 // Moves the centroid and handle to the origin. This method follows that of
