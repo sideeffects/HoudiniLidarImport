@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024
+ * Copyright (c) 2026
  *	Side Effects Software Inc.  All rights reserved.
  *
  * Redistribution and use of Houdini Development Kit samples in source and
@@ -1404,9 +1404,15 @@ sop_E57PointReader::Builder::sphericalPosition()
 	    fpreal azimuth = b[i*3+1];
 	    fpreal elevation = b[i*3+2];
 
-	    b[i*3] = range * SYScos(elevation) * SYScos(azimuth);
-	    b[i*3+1] = range * SYScos(elevation) * SYSsin(azimuth);
-	    b[i*3+2] = range * SYSsin(elevation);
+            fpreal sin_elevation, cos_elevation;
+            SYSsincos(elevation, &sin_elevation, &cos_elevation);
+
+            fpreal sin_azimuth, cos_azimuth;
+            SYSsincos(azimuth, &sin_azimuth, &cos_azimuth);
+
+	    b[i*3] = range * cos_elevation * cos_azimuth;
+	    b[i*3+1] = range * cos_elevation * sin_azimuth;
+	    b[i*3+2] = range * sin_elevation;
 	}
     };
 
@@ -1946,10 +1952,16 @@ E57Reader::E57Reader(const char *filename)
             fpreal cos_elevation_min = SYScos(elevation_min);
             fpreal cos_elevation_max = SYScos(elevation_max);
 
-            x_min = range_min * cos_elevation_min * SYScos(azimuth_min);
-            x_max = range_max * cos_elevation_max * SYScos(azimuth_max);
-            y_min = range_min * cos_elevation_min * SYSsin(azimuth_min);
-            y_max = range_max * cos_elevation_max * SYSsin(azimuth_max);
+            fpreal sin_azimuth_min, cos_azimuth_min;
+            SYSsincos(azimuth_min, &sin_azimuth_min, &cos_azimuth_min);
+
+            fpreal sin_azimuth_max, cos_azimuth_max;
+            SYSsincos(azimuth_max, &sin_azimuth_max, &cos_azimuth_max);
+
+            x_min = range_min * cos_elevation_min * cos_azimuth_min;
+            x_max = range_max * cos_elevation_max * cos_azimuth_max;
+            y_min = range_min * cos_elevation_min * sin_azimuth_min;
+            y_max = range_max * cos_elevation_max * sin_azimuth_max;
             z_min = range_min * SYSsin(elevation_min);
             z_max = range_max * SYSsin(elevation_max);
 
