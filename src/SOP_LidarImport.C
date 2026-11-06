@@ -28,8 +28,8 @@
 #include "SOP_LidarImport.h"
 #include "SOP_LidarImport.proto.h"
 
-#include <E57/E57Foundation.h>
-#include <E57/E57Simple.h>
+#include <E57Format/E57Format.h>
+#include <E57Format/E57SimpleData.h>
 
 #include <laszip/laszip_api.h>
 
@@ -1130,16 +1130,9 @@ struct sop_ScanInfo
 
 struct sop_ImageInfo
 {
-    typedef e57::PinholeRepresentation PinholeRep;
-    typedef e57::SphericalRepresentation SphericalRep;
-    typedef e57::CylindricalRepresentation CylindricalRep;
-
-    union
-    {
-	PinholeRep		myPinholeRep;
-	SphericalRep		mySphericalRep;
-	CylindricalRep		myCylindricalRep;
-    };
+    e57::PinholeRepresentation      myPinholeRep;
+    e57::SphericalRepresentation    mySphericalRep;
+    e57::CylindricalRepresentation  myCylindricalRep;
     UT_Matrix4D			myRBXForm;
     UT_StringHolder		myAssociatedScanGuid;
     e57::Image2DType		myFileType;
@@ -1720,33 +1713,33 @@ sop_E57PointReader::readBlock(GA_Offset start, GA_Offset end)
 exint
 getNodeValueI(e57::Node node)
 {
-    UT_ASSERT(node.type() == e57::E57_INTEGER);
+    UT_ASSERT(node.type() == e57::TypeInteger);
     return e57::IntegerNode(node).value();
 }
 
 exint
 getNodeMinimumI(e57::Node node)
 {
-    UT_ASSERT(node.type() == e57::E57_INTEGER);
+    UT_ASSERT(node.type() == e57::TypeInteger);
     return e57::IntegerNode(node).minimum();
 }
 
 exint
 getNodeMaximumI(e57::Node node)
 {
-    UT_ASSERT(node.type() == e57::E57_INTEGER);
+    UT_ASSERT(node.type() == e57::TypeInteger);
     return e57::IntegerNode(node).maximum();
 }
 
 fpreal64
 getNodeValueF(e57::Node node)
 {
-    UT_ASSERT(node.type() == e57::E57_FLOAT 
-	    || node.type() == e57::E57_SCALED_INTEGER
-	    || node.type() == e57::E57_INTEGER);
-    if (node.type() == e57::E57_FLOAT)
+    UT_ASSERT(node.type() == e57::TypeFloat 
+	    || node.type() == e57::TypeScaledInteger
+	    || node.type() == e57::TypeInteger);
+    if (node.type() == e57::TypeFloat)
 	return e57::FloatNode(node).value();
-    else if (node.type() == e57::E57_SCALED_INTEGER)
+    else if (node.type() == e57::TypeScaledInteger)
 	return e57::ScaledIntegerNode(node).scaledValue();
     else
 	return e57::IntegerNode(node).value();
@@ -1755,12 +1748,12 @@ getNodeValueF(e57::Node node)
 fpreal64
 getNodeMinimumF(e57::Node node)
 {
-    UT_ASSERT(node.type() == e57::E57_FLOAT 
-	    || node.type() == e57::E57_SCALED_INTEGER
-	    || node.type() == e57::E57_INTEGER);
-    if (node.type() == e57::E57_FLOAT)
+    UT_ASSERT(node.type() == e57::TypeFloat 
+	    || node.type() == e57::TypeScaledInteger
+	    || node.type() == e57::TypeInteger);
+    if (node.type() == e57::TypeFloat)
 	return e57::FloatNode(node).minimum();
-    else if (node.type() == e57::E57_SCALED_INTEGER)
+    else if (node.type() == e57::TypeScaledInteger)
 	return e57::ScaledIntegerNode(node).scaledMinimum();
     else
 	return e57::IntegerNode(node).minimum();
@@ -1769,12 +1762,12 @@ getNodeMinimumF(e57::Node node)
 fpreal64
 getNodeMaximumF(e57::Node node)
 {
-    UT_ASSERT(node.type() == e57::E57_FLOAT 
-	    || node.type() == e57::E57_SCALED_INTEGER
-	    || node.type() == e57::E57_INTEGER);
-    if (node.type() == e57::E57_FLOAT)
+    UT_ASSERT(node.type() == e57::TypeFloat 
+	    || node.type() == e57::TypeScaledInteger
+	    || node.type() == e57::TypeInteger);
+    if (node.type() == e57::TypeFloat)
 	return e57::FloatNode(node).maximum();
-    else if (node.type() == e57::E57_SCALED_INTEGER)
+    else if (node.type() == e57::TypeScaledInteger)
 	return e57::ScaledIntegerNode(node).scaledMaximum();
     else
 	return e57::IntegerNode(node).maximum();
@@ -2161,19 +2154,19 @@ E57Reader::E57Reader(const char *filename)
 	{
 	    e57::BlobNode png_node(proj_model.get("pngImage"));
 
-	    image.myFileType = e57::Image2DType::E57_PNG_IMAGE;
+	    image.myFileType = e57::Image2DType::ImagePNG;
 	    image.mySize = png_node.byteCount();
 	}
 	else if (proj_model.isDefined("jpegImage"))
 	{
 	    e57::BlobNode jpeg_node(proj_model.get("jpegImage"));
 
-	    image.myFileType = e57::Image2DType::E57_JPEG_IMAGE;
+	    image.myFileType = e57::Image2DType::ImageJPEG;
 	    image.mySize = jpeg_node.byteCount();
 	}
 	else
 	{
-	    image.myFileType = e57::Image2DType::E57_NO_IMAGE;
+	    image.myFileType = e57::Image2DType::ImageNone;
 	    image.mySize = 0;
 	}
     };
@@ -2186,7 +2179,7 @@ E57Reader::E57Reader(const char *filename)
 	if (image_node.isDefined("pinholeRepresentation"))
 	{
 	    // set projection model type
-	    image.myProjectionType = e57::Image2DProjection::E57_PINHOLE;
+	    image.myProjectionType = e57::Image2DProjection::ProjectionPinhole;
 
 	    e57::StructureNode pinhole_model(
 		    image_node.get("pinholeRepresentation"));
@@ -2212,7 +2205,7 @@ E57Reader::E57Reader(const char *filename)
 	else if (image_node.isDefined("sphericalRepresentation"))
 	{
 	    // set projection model type
-	    image.myProjectionType = e57::Image2DProjection::E57_SPHERICAL;
+	    image.myProjectionType = e57::Image2DProjection::ProjectionSpherical;
 
 	    e57::StructureNode spherical_model(
 		    image_node.get("sphericalRepresentation"));
@@ -2232,7 +2225,7 @@ E57Reader::E57Reader(const char *filename)
 	else if (image_node.isDefined("cylindricalRepresentation"))
 	{
 	    // set projection model type
-	    image.myProjectionType = e57::Image2DProjection::E57_CYLINDRICAL;
+	    image.myProjectionType = e57::Image2DProjection::ProjectionCylindrical;
 
 	    e57::StructureNode cylindrical_model(
 		    image_node.get("cylindricalRepresentation"));
@@ -2256,7 +2249,7 @@ E57Reader::E57Reader(const char *filename)
 	else if (image_node.isDefined("visualReferenceRepresentation"))
 	{
 	    // set projection model type
-	    image.myProjectionType = e57::Image2DProjection::E57_VISUAL;
+	    image.myProjectionType = e57::Image2DProjection::ProjectionVisual;
 
 	    e57::StructureNode ref_model(
 		    image_node.get("visualReferenceRepresentation"));
@@ -2270,20 +2263,20 @@ E57Reader::E57Reader(const char *filename)
 	else
 	{
 	    // set projection model type
-	    image.myProjectionType = e57::Image2DProjection::E57_NO_PROJECTION;
+	    image.myProjectionType = e57::Image2DProjection::ProjectionNone;
 
 	    // Since there's no projection model, there's no image either
 	    image.myWidth = 0;
 	    image.myHeight = 0;
 	    image.mySize = 0;
-	    image.myFileType = e57::Image2DType::E57_NO_IMAGE;
+	    image.myFileType = e57::Image2DType::ImageNone;
 	}
 
 	// set rigid body transform
 	set_rbxform(image_node, image.myRBXForm);
 
 	// set associated scan guid
-	if (image.myProjectionType > e57::Image2DProjection::E57_VISUAL)
+	if (image.myProjectionType > e57::Image2DProjection::ProjectionVisual)
 	{
 	    UT_String guid_name_wrapper;
 	    try
@@ -2318,11 +2311,11 @@ E57Reader::getImageBuffer(int idx, bool read_ref_images) const
 {
     const sop_ImageInfo &image = myImages(idx);
 
-    if (image.myProjectionType == e57::Image2DProjection::E57_NO_PROJECTION
-	    || image.myFileType == e57::Image2DType::E57_NO_IMAGE)
+    if (image.myProjectionType == e57::Image2DProjection::ProjectionNone
+	    || image.myFileType == e57::Image2DType::ImageNone)
 	return nullptr;
 
-    if (image.myProjectionType <= e57::Image2DProjection::E57_VISUAL 
+    if (image.myProjectionType <= e57::Image2DProjection::ProjectionVisual 
 	    && !read_ref_images)
 	return nullptr;
 
@@ -2347,12 +2340,12 @@ E57Reader::getImageBuffer(int idx, bool read_ref_images) const
 
     e57::VectorNode image_root_node(myFileHandle->root().get("/images2D"));
     e57::StructureNode image_node(image_root_node.get(idx));
-    if (image.myProjectionType == e57::Image2DProjection::E57_PINHOLE)
+    if (image.myProjectionType == e57::Image2DProjection::ProjectionPinhole)
     {
 	e57::StructureNode pinhole_model(image_node.get("pinholeRepresentation"));
 	read_image_blob(pinhole_model, image.mySize, image_buffer.get());
     }
-    else if (image.myProjectionType == e57::Image2DProjection::E57_SPHERICAL)
+    else if (image.myProjectionType == e57::Image2DProjection::ProjectionSpherical)
     {
 	e57::StructureNode spherical_model(
 		image_node.get("sphericalRepresentation"));
@@ -2385,7 +2378,7 @@ E57Reader::getImageSize(int idx) const
 bool
 E57Reader::hasValidProjectionType(int idx) const
 {
-    return myImages(idx).myProjectionType > e57::Image2DProjection::E57_VISUAL;
+    return myImages(idx).myProjectionType > e57::Image2DProjection::ProjectionVisual;
 }
 
 const UT_StringHolder &
@@ -2418,7 +2411,7 @@ E57Reader::computePointProjection(int idx, const UT_Vector4D pos,
     else
 	azimuth += 3.0*M_PI/2.0;
 
-    if (image.myProjectionType == e57::Image2DProjection::E57_PINHOLE)
+    if (image.myProjectionType == e57::Image2DProjection::ProjectionPinhole)
     {
 	e57::PinholeRepresentation pinhole_rep = 
 	    image.myPinholeRep;
@@ -2430,7 +2423,7 @@ E57Reader::computePointProjection(int idx, const UT_Vector4D pos,
 	    - (pos.y()/pos.z() * pinhole_rep.focalLength
 		    / pinhole_rep.pixelHeight);
     }
-    else if (image.myProjectionType == e57::Image2DProjection::E57_SPHERICAL)
+    else if (image.myProjectionType == e57::Image2DProjection::ProjectionSpherical)
     {
 	range = SYShypot(range, pos.z());
 	fpreal elevation = SYSasin(pos.z() / range);
@@ -2443,7 +2436,7 @@ E57Reader::computePointProjection(int idx, const UT_Vector4D pos,
 	i_y = image.myHeight / 2.0 
 	    - elevation / sphere_rep.pixelHeight;
     }
-    else if (image.myProjectionType == e57::Image2DProjection::E57_CYLINDRICAL)
+    else if (image.myProjectionType == e57::Image2DProjection::ProjectionCylindrical)
     {
 	e57::CylindricalRepresentation cyl_rep = 
 	    image.myCylindricalRep;
